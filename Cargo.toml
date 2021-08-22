@@ -1,0 +1,19 @@
+[package]
+name = "interlock"
+version = "0.0.0"
+authors = ["yvt <i@yvt.jp>"]
+license = "MIT/Apache-2.0"
+edition = "2018"
+readme = "README.md"
+description = "Readers-writer locks optimized for interval locks"
+categories = ["no-std"]
+repository = "https://github.com/yvt/interlock-rs"
+
+[features]
+doc_cfg = []
+std = []
+
+[dependencies]
+
+[package.metadata.docs.rs]
+all-features = true
