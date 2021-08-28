@@ -2,6 +2,7 @@ use core::{fmt, marker::PhantomPinned, ops::Deref};
 
 /// Wraps `&T` where `T: `[`EarlyDrop`]. By using this as `Pin<&Guard<T>>`,
 /// it can be enforced that [`EarlyDrop::early_drop`] is always called on `T`.
+#[deprecated = "`Guard` is useless because it doesn't do what it claims to do"]
 pub struct Guard<'a, T: EarlyDrop> {
     inner: &'a T,
     /// Ensures `Guard`'s destructor is called.
@@ -19,8 +20,27 @@ pub trait EarlyDrop {
 }
 
 impl<'a, T: EarlyDrop> Guard<'a, T> {
+    /// Construct a `Guard`.
+    ///
+    /// # Safety
+    ///
+    /// `Pin<&Guard<T>>` actually doesn't enforce that `early_drop` is always
+    /// called on `T`. See the following example.
+    ///
+    /// ```rust,ignore
+    /// let storage: MyType;
+    /// let storage_ptr  = (&storage) as *const MyType;
+    /// let guard = Box::pin(Guard::new(&storage));
+    ///
+    /// std::mem::forget(guard);
+    /// drop(storage);
+    ///
+    /// // `Guard` still exists (meaning `early_drop` isn't called yet), but
+    /// // the target is gone, so the following line causes a UB
+    /// unsafe { (*storage_ptr).hoge() };
+    /// ```
     #[inline]
-    pub const fn new(inner: &'a T) -> Self {
+    pub const unsafe fn new(inner: &'a T) -> Self {
         Self {
             inner,
             _pin: PhantomPinned,
