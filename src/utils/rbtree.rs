@@ -759,7 +759,11 @@ impl<Element, Summary: Clone> Node<Element, Summary> {
 pub(crate) mod tests {
     use super::*;
     use quickcheck_macros::quickcheck;
-    use std::{cell::UnsafeCell, collections::BTreeSet, prelude::v1::*};
+    use std::{
+        cell::UnsafeCell,
+        collections::{BTreeSet, HashMap},
+        prelude::v1::*,
+    };
 
     impl<Element: std::fmt::Debug, Summary: Clone + std::fmt::Debug + PartialEq>
         Node<Element, Summary>
@@ -835,6 +839,20 @@ pub(crate) mod tests {
                         }
                     },
                     &mut visited_path,
+                );
+            }
+
+            // Check duplicates
+            let mut counts = HashMap::new();
+            for p_node in Self::iter(*tree) {
+                *counts.entry(p_node).or_insert(0usize) += 1;
+            }
+
+            for (&ptr, &count) in counts.iter() {
+                assert_eq!(
+                    count, 1,
+                    "node {:?} appear in the tree for {} times",
+                    ptr, count
                 );
             }
         }
