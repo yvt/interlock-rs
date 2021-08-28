@@ -51,7 +51,7 @@ unsafe impl<Index: Send, Priority: Send, InProgress: Send> Sync
 ///  - `(index, 1)`: A lower bound (inclusive)
 ///  - `(index, -1)`: An upper bound (exclusive)
 ///
-type ReadNode<Index> = rbtree::Node<(Index, i8), usize>;
+type ReadNode<Index> = rbtree::Node<(Index, i8), isize>;
 
 /// A node of [`RbTreeIntervalRwLockCore::writes`]. Represents a mutable borrow.
 type WriteNode<Index> = rbtree::Node<Range<Index>, ()>;
@@ -254,22 +254,22 @@ impl<Index, Priority, InProgress> Default for TryWriteLockStateInner<Index, Prio
 
 struct ReadNodeCallback;
 
-impl<Index: Ord> rbtree::Callback<(Index, i8), usize> for ReadNodeCallback {
+impl<Index: Ord> rbtree::Callback<(Index, i8), isize> for ReadNodeCallback {
     // The summary of nodes is the sum of their `element.1` values
     #[inline]
-    fn zero_summary(&mut self) -> usize {
+    fn zero_summary(&mut self) -> isize {
         0
     }
     #[inline]
-    fn element_to_summary(&mut self, element: &(Index, i8)) -> usize {
-        element.1 as isize as usize
+    fn element_to_summary(&mut self, element: &(Index, i8)) -> isize {
+        element.1 as isize
     }
     #[inline]
-    fn add_assign_summary(&mut self, lhs: &mut usize, rhs: &usize) {
+    fn add_assign_summary(&mut self, lhs: &mut isize, rhs: &isize) {
         *lhs = lhs.wrapping_add(*rhs);
     }
     #[inline]
-    fn sub_assign_summary(&mut self, lhs: &mut usize, rhs: &usize) {
+    fn sub_assign_summary(&mut self, lhs: &mut isize, rhs: &isize) {
         *lhs = lhs.wrapping_sub(*rhs);
     }
     #[inline]
@@ -409,8 +409,8 @@ where
                     let read_nodes = unsafe { &mut *state.read.get() };
                     debug_assert!(read_nodes.is_none());
                     let [n0, n1] = read_nodes.insert([
-                        rbtree::Node::new((borrow_range.start, 1), 1usize),
-                        rbtree::Node::new((borrow_range.end, -1), !0usize),
+                        rbtree::Node::new((borrow_range.start, 1), 1),
+                        rbtree::Node::new((borrow_range.end, -1), -1),
                     ]);
                     [n0.into(), n1.into()]
                 };
@@ -587,8 +587,8 @@ where
                 let read_nodes = unsafe { &mut *state.read.get() };
                 debug_assert!(read_nodes.is_none());
                 let [n0, n1] = read_nodes.insert([
-                    ReadNode::new((range.start, 1), 1usize),
-                    ReadNode::new((range.end, -1), !0usize),
+                    ReadNode::new((range.start, 1), 1),
+                    ReadNode::new((range.end, -1), -1),
                 ]);
                 [n0.into(), n1.into()]
             };
@@ -1202,8 +1202,8 @@ where
                     // Actually, the previous borrowed region was empty. Create
                     // `ReadNode`s now.
                     let read_nodes = read_node_cells.insert([
-                        ReadNode::new((range.start, 1), 1usize),
-                        ReadNode::new((new_end, -1), !0usize),
+                        ReadNode::new((range.start, 1), 1),
+                        ReadNode::new((new_end, -1), -1),
                     ]);
                     unsafe {
                         rbtree::Node::insert(
