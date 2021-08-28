@@ -756,8 +756,7 @@ impl<Element, Summary: Clone> Node<Element, Summary> {
 }
 
 #[cfg(test)]
-mod tests {
-    extern crate std;
+pub(crate) mod tests {
     use super::*;
     use quickcheck_macros::quickcheck;
     use std::{cell::UnsafeCell, collections::BTreeSet, prelude::v1::*};
@@ -785,7 +784,7 @@ mod tests {
             })
         }
 
-        unsafe fn dump(
+        pub(crate) unsafe fn dump(
             p_node: Option<NonNull<Self>>,
             level: usize,
             out: &mut impl std::fmt::Write,
@@ -810,7 +809,7 @@ mod tests {
             Ok(())
         }
 
-        unsafe fn validate(
+        pub(crate) unsafe fn validate(
             callback: &mut impl Callback<Element, Summary>,
             tree: &Option<NonNull<Self>>,
         ) {

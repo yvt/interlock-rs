@@ -17,6 +17,9 @@ use crate::utils::{
     rbtree,
 };
 
+#[cfg(test)]
+mod tests;
+
 // Data types
 // -----------------------------------------------------------------------------
 
@@ -59,6 +62,7 @@ type PendingNode<Index, Priority, InProgress> =
     rbtree::Node<Pending<Index, Priority, InProgress>, ()>;
 
 /// An pending borrow.
+#[derive(Debug)]
 struct Pending<Index, Priority, InProgress> {
     /// The next index range to borrow.
     range: Range<Index>,
@@ -71,6 +75,7 @@ struct Pending<Index, Priority, InProgress> {
     in_progress: InProgress,
 }
 
+#[derive(Debug)]
 enum LockStatePtr<Index, Priority, InProgress> {
     Read(NonNull<ReadLockStateInner<Index, Priority, InProgress>>),
     Write(NonNull<WriteLockStateInner<Index, Priority, InProgress>>),

@@ -134,3 +134,15 @@ pub trait UnlockCallback<InProgress> {
     /// operation.
     fn complete(&mut self, in_progress: InProgress);
 }
+
+impl LockCallback<()> for () {
+    type Output = ();
+    fn in_progress(self) -> (Self::Output, ()) {
+        ((), ())
+    }
+    fn complete(self) -> Self::Output {}
+}
+
+impl UnlockCallback<()> for () {
+    fn complete(&mut self, _in_progress: ()) {}
+}

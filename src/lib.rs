@@ -7,6 +7,9 @@
 #![feature(type_alias_impl_trait)]
 #![feature(const_impl_trait)]
 
+#[cfg(test)]
+extern crate std;
+
 mod core;
 pub mod hl;
 pub mod raw;
