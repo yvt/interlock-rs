@@ -1104,6 +1104,10 @@ where
         if let Some(first_conflict_index) = first_conflict_index.clone() {
             // Reinsert `pending_node_ptr` at the new position
             unsafe { pending_node_ptr.as_mut() }.element.range.start = first_conflict_index;
+
+            unsafe {
+                rbtree::Node::insert(PendingNodeCallback, &mut self.pendings, pending_node_ptr);
+            }
         } else {
             // This borrow is complete. Move out `in_progress` from `parent`
             // and assign `None` to `(Read|Write)LockState::pending`.
