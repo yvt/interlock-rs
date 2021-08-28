@@ -1,6 +1,5 @@
 //! The core algorithm implementation to manage interval borrows and ensure
 //! mutual exclusion.
-use crate::utils::pin::{EarlyDrop, Guard};
 use core::{ops::Range, pin::Pin};
 
 pub mod rbtree;
@@ -39,23 +38,18 @@ pub trait IntervalRwLockCore {
 
     type Priority;
 
-    /// The storage for per-lock data. Early-dropping
-    /// ([`EarlyDrop::early_drop`]) it while it has an associated lock will lead
-    /// to a panic.
-    ///
-    /// This is `!Send + !Sync` so that the above drop check doesn't cause a
-    /// data race. The user can re-introduce `Send`ness and `Sync`ness if this
-    /// situation can be avoided.
-    type ReadLockState: EarlyDrop;
+    /// The storage for per-lock data. Dropping it while it has an associated
+    /// lock will cause a panic.
+    type ReadLockState;
 
     /// Ditto for writer locks.
-    type WriteLockState: EarlyDrop;
+    type WriteLockState;
 
     /// Ditto for non-blocking reader locks.
-    type TryReadLockState: EarlyDrop;
+    type TryReadLockState;
 
     /// Ditto for non-blocking writer locks.
-    type TryWriteLockState: EarlyDrop;
+    type TryWriteLockState;
 
     /// Created by a `LockCallback` implementation when a lock operation is
     /// blocked in the middle. It will later be passed to [`UnlockCallback::
@@ -67,7 +61,7 @@ pub trait IntervalRwLockCore {
         self: Pin<&mut Self>,
         range: Range<Self::Index>,
         priority: Self::Priority,
-        state: Pin<&Guard<'_, Self::ReadLockState>>,
+        state: Pin<&mut Self::ReadLockState>,
         callback: Callback,
     ) -> Callback::Output;
 
@@ -76,7 +70,7 @@ pub trait IntervalRwLockCore {
         self: Pin<&mut Self>,
         range: Range<Self::Index>,
         priority: Self::Priority,
-        state: Pin<&Guard<'_, Self::WriteLockState>>,
+        state: Pin<&mut Self::WriteLockState>,
         callback: Callback,
     ) -> Callback::Output;
 
@@ -84,41 +78,41 @@ pub trait IntervalRwLockCore {
     fn try_lock_read(
         self: Pin<&mut Self>,
         range: Range<Self::Index>,
-        state: Pin<&Guard<'_, Self::TryReadLockState>>,
+        state: Pin<&mut Self::TryReadLockState>,
     ) -> bool;
 
     /// Attempt to acquire a writer lock. (Non-blocking)
     fn try_lock_write(
         self: Pin<&mut Self>,
         range: Range<Self::Index>,
-        state: Pin<&Guard<'_, Self::TryWriteLockState>>,
+        state: Pin<&mut Self::TryWriteLockState>,
     ) -> bool;
 
     /// Release a reader lock.
     fn unlock_read<Callback: UnlockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
-        state: Pin<&Guard<'_, Self::ReadLockState>>,
+        state: Pin<&mut Self::ReadLockState>,
         callback: Callback,
     ) -> Option<Self::InProgress>;
 
     /// Release a writer lock.
     fn unlock_write<Callback: UnlockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
-        state: Pin<&Guard<'_, Self::WriteLockState>>,
+        state: Pin<&mut Self::WriteLockState>,
         callback: Callback,
     ) -> Option<Self::InProgress>;
 
     /// Release a non-blocking reader lock.
     fn unlock_try_read<Callback: UnlockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
-        state: Pin<&Guard<'_, Self::TryReadLockState>>,
+        state: Pin<&mut Self::TryReadLockState>,
         callback: Callback,
     );
 
     /// Release a non-blocking writer lock.
     fn unlock_try_write<Callback: UnlockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
-        state: Pin<&Guard<'_, Self::TryWriteLockState>>,
+        state: Pin<&mut Self::TryWriteLockState>,
         callback: Callback,
     );
 }

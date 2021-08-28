@@ -13,7 +13,7 @@ use guard::guard;
 use super::{IntervalRwLockCore, LockCallback, UnlockCallback};
 use crate::utils::{
     panicking::abort_on_unwind,
-    pin::{EarlyDrop, Guard},
+    pin::{EarlyDrop, EarlyDropGuard},
     rbtree,
 };
 
@@ -27,6 +27,19 @@ pub struct RbTreeIntervalRwLockCore<Index, Priority, InProgress> {
     pendings: Option<NonNull<PendingNode<Index, Priority, InProgress>>>,
     /// Ensures the destructor is called.
     _pin: PhantomPinned,
+}
+
+// Safety: They are semantically container
+unsafe impl<Index: Send, Priority: Send, InProgress: Send> Send
+    for RbTreeIntervalRwLockCore<Index, Priority, InProgress>
+{
+}
+
+// Safety: It can do nothing with `&Self`. But we require `Send` just in case,
+// following `std::mutex::Mutex`'s pattern.
+unsafe impl<Index: Send, Priority: Send, InProgress: Send> Sync
+    for RbTreeIntervalRwLockCore<Index, Priority, InProgress>
+{
 }
 
 /// A node of [`RbTreeIntervalRwLockCore::reads`]. Represents an endpoint of an
@@ -59,8 +72,8 @@ struct Pending<Index, Priority, InProgress> {
 }
 
 enum LockStatePtr<Index, Priority, InProgress> {
-    Read(NonNull<ReadLockState<Index, Priority, InProgress>>),
-    Write(NonNull<WriteLockState<Index, Priority, InProgress>>),
+    Read(NonNull<ReadLockStateInner<Index, Priority, InProgress>>),
+    Write(NonNull<WriteLockStateInner<Index, Priority, InProgress>>),
 }
 
 impl<Index, Priority, InProgress> Clone for LockStatePtr<Index, Priority, InProgress> {
@@ -72,9 +85,80 @@ impl<Index, Priority, InProgress> Clone for LockStatePtr<Index, Priority, InProg
 
 impl<Index, Priority, InProgress> Copy for LockStatePtr<Index, Priority, InProgress> {}
 
-/// Provides a storage to store information about a blocking reader lock in
-/// [`RbTreeIntervalRwLockCore`].
-pub struct ReadLockState<Index, Priority, InProgress> {
+macro_rules! impl_lock_state {
+    ($(
+        $( #[$meta:meta] )*
+        pub struct $ty:ident { inner: $inner:ident }
+    )*) => {$(
+        $( #[$meta] )*
+
+        #[pin_project::pin_project]
+        pub struct $ty<Index, Priority, InProgress> {
+            #[pin]
+            inner: EarlyDropGuard<$inner<Index, Priority, InProgress>>
+        }
+
+        impl<Index, Priority, InProgress> $ty<Index, Priority, InProgress> {
+            #[inline]
+            pub const fn new() -> Self {
+                Self { inner: EarlyDropGuard::new() }
+            }
+
+            #[inline]
+            fn get(self: Pin<&mut Self>) -> Pin<&$inner<Index, Priority, InProgress>> {
+                self.project().inner.get_or_insert_default()
+            }
+        }
+
+        impl<Index, Priority, InProgress> fmt::Debug for $ty<Index, Priority, InProgress> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                // We might be tempted to debug-format the contained nodes, but
+                // we should because `Index`, `Priority`, and `InProgress` might
+                // not be designed to be accessed in a different thread. We can
+                // only show the parent's address.
+                f.write_str(stringify!($ty))?;
+                if let Some(parent) = self.inner.get().and_then(|inner|inner.parent.get()) {
+                    write!(f, "(< borrow data for {:p} >)", parent)
+                } else {
+                    f.write_str("(< empty >)")
+                }
+            }
+        }
+
+        impl<Index, Priority, InProgress> Default for $ty<Index, Priority, InProgress> {
+            #[inline]
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        // Safety: `$ty` is just a vessel to contain the data associated with
+        // locks. Its content is only accessed by `RbTreeIntervalRwLockCore`'s
+        // methods, to which `$ty` is only passed as `Pin<&mut $ty>`. The
+        // destructor isn't allowed to run if the slots for any of these generic
+        // parameter types are filled.
+        unsafe impl<Index, Priority, InProgress> Send for $ty<Index, Priority, InProgress> {}
+        unsafe impl<Index, Priority, InProgress> Sync for $ty<Index, Priority, InProgress> {}
+    )*};
+}
+
+impl_lock_state! {
+    /// Provides a storage to store information about a blocking reader lock in
+    /// [`RbTreeIntervalRwLockCore`].
+    pub struct ReadLockState { inner: ReadLockStateInner }
+
+    /// Provides a storage to store information about a blocking writer lock in
+    /// [`RbTreeIntervalRwLockCore`].
+    pub struct WriteLockState { inner: WriteLockStateInner }
+    /// Provides a storage to store information about a non-blocking reader lock in
+    /// [`RbTreeIntervalRwLockCore`].
+    pub struct TryReadLockState { inner: TryReadLockStateInner }
+    /// Provides a storage to store information about a non-blocking writer lock in
+    /// [`RbTreeIntervalRwLockCore`].
+    pub struct TryWriteLockState { inner: TryWriteLockStateInner }
+}
+
+struct ReadLockStateInner<Index, Priority, InProgress> {
     // | State                       | `parent` | `read` | `pending` |
     // | --------------------------- | -------- | ------ | --------- |
     // | Not in use                  | `None`   | `None` | `None`    |
@@ -95,38 +179,32 @@ pub struct ReadLockState<Index, Priority, InProgress> {
     read: UnsafeCell<Option<[ReadNode<Index>; 2]>>,
 }
 
-/// Provides a storage to store information about a blocking writer lock in
-/// [`RbTreeIntervalRwLockCore`].
-pub struct WriteLockState<Index, Priority, InProgress> {
-    /// See [`ReadLockState::parent`]
+struct WriteLockStateInner<Index, Priority, InProgress> {
+    /// See [`ReadLockStateInner::parent`]
     parent: Cell<Option<NonNull<RbTreeIntervalRwLockCore<Index, Priority, InProgress>>>>,
-    /// See [`ReadLockState::pending`]
+    /// See [`ReadLockStateInner::pending`]
     pending: UnsafeCell<Option<PendingNode<Index, Priority, InProgress>>>,
     /// Stores a linked `WriteNode` if the borrowed region is non-empty.
     write: UnsafeCell<Option<WriteNode<Index>>>,
 }
 
-/// Provides a storage to store information about a non-blocking reader lock in
-/// [`RbTreeIntervalRwLockCore`].
-pub struct TryReadLockState<Index, Priority, InProgress> {
-    /// See [`ReadLockState::parent`]
+struct TryReadLockStateInner<Index, Priority, InProgress> {
+    /// See [`ReadLockStateInner::parent`]
     parent: Cell<Option<NonNull<RbTreeIntervalRwLockCore<Index, Priority, InProgress>>>>,
-    /// See [`ReadLockState::read`]
+    /// See [`ReadLockStateInner::read`]
     read: UnsafeCell<Option<[ReadNode<Index>; 2]>>,
 }
 
-/// Provides a storage to store information about a non-blocking writer lock in
-/// [`RbTreeIntervalRwLockCore`].
-pub struct TryWriteLockState<Index, Priority, InProgress> {
-    /// See [`ReadLockState::parent`]
+struct TryWriteLockStateInner<Index, Priority, InProgress> {
+    /// See [`ReadLockStateInner::parent`]
     parent: Cell<Option<NonNull<RbTreeIntervalRwLockCore<Index, Priority, InProgress>>>>,
-    /// See [`WriteLockState::write`]
+    /// See [`WriteLockStateInner::write`]
     write: UnsafeCell<Option<WriteNode<Index>>>,
 }
 
-impl<Index, Priority, InProgress> ReadLockState<Index, Priority, InProgress> {
+impl<Index, Priority, InProgress> Default for ReadLockStateInner<Index, Priority, InProgress> {
     #[inline]
-    pub const fn new() -> Self {
+    fn default() -> Self {
         Self {
             parent: Cell::new(None),
             read: UnsafeCell::new(None),
@@ -135,9 +213,9 @@ impl<Index, Priority, InProgress> ReadLockState<Index, Priority, InProgress> {
     }
 }
 
-impl<Index, Priority, InProgress> WriteLockState<Index, Priority, InProgress> {
+impl<Index, Priority, InProgress> Default for WriteLockStateInner<Index, Priority, InProgress> {
     #[inline]
-    pub const fn new() -> Self {
+    fn default() -> Self {
         Self {
             parent: Cell::new(None),
             write: UnsafeCell::new(None),
@@ -146,9 +224,9 @@ impl<Index, Priority, InProgress> WriteLockState<Index, Priority, InProgress> {
     }
 }
 
-impl<Index, Priority, InProgress> TryReadLockState<Index, Priority, InProgress> {
+impl<Index, Priority, InProgress> Default for TryReadLockStateInner<Index, Priority, InProgress> {
     #[inline]
-    pub const fn new() -> Self {
+    fn default() -> Self {
         Self {
             parent: Cell::new(None),
             read: UnsafeCell::new(None),
@@ -156,42 +234,15 @@ impl<Index, Priority, InProgress> TryReadLockState<Index, Priority, InProgress> 
     }
 }
 
-impl<Index, Priority, InProgress> TryWriteLockState<Index, Priority, InProgress> {
+impl<Index, Priority, InProgress> Default for TryWriteLockStateInner<Index, Priority, InProgress> {
     #[inline]
-    pub const fn new() -> Self {
+    fn default() -> Self {
         Self {
             parent: Cell::new(None),
             write: UnsafeCell::new(None),
         }
     }
 }
-
-macro_rules! impl_lock_state {
-    ($ty:ident) => {
-        impl<Index, Priority, InProgress> fmt::Debug for $ty<Index, Priority, InProgress> {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str(stringify!($ty))?;
-                if let Some(parent) = self.parent.get() {
-                    write!(f, "(< borrow data from {:?} >)", parent)
-                } else {
-                    f.write_str("(< empty >)")
-                }
-            }
-        }
-
-        impl<Index, Priority, InProgress> Default for $ty<Index, Priority, InProgress> {
-            #[inline]
-            fn default() -> Self {
-                Self::new()
-            }
-        }
-    };
-}
-
-impl_lock_state!(ReadLockState);
-impl_lock_state!(WriteLockState);
-impl_lock_state!(TryReadLockState);
-impl_lock_state!(TryWriteLockState);
 
 // RB tree callbacks
 // -----------------------------------------------------------------------------
@@ -297,11 +348,13 @@ where
         self: Pin<&mut Self>,
         range: Range<Self::Index>,
         priority: Self::Priority,
-        state: Pin<&Guard<'_, Self::ReadLockState>>,
+        state: Pin<&mut Self::ReadLockState>,
         callback: Callback,
     ) -> Callback::Output {
         // Safety: We won't violate the pinning invariant
         let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
 
         debug_assert!(range.start < range.end, "invalid range");
 
@@ -314,7 +367,7 @@ where
                     Some(Pending {
                         range: first_conflict_index..range.end.clone(),
                         priority,
-                        parent: LockStatePtr::Read((&**state).into()),
+                        parent: LockStatePtr::Read((&*state).into()),
                         in_progress,
                     }),
                 )
@@ -395,11 +448,13 @@ where
         self: Pin<&mut Self>,
         range: Range<Self::Index>,
         priority: Self::Priority,
-        state: Pin<&Guard<'_, Self::WriteLockState>>,
+        state: Pin<&mut Self::WriteLockState>,
         callback: Callback,
     ) -> Callback::Output {
         // Safety: We won't violate the pinning invariant
         let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
 
         debug_assert!(range.start < range.end, "invalid range");
 
@@ -421,7 +476,7 @@ where
                 Some(Pending {
                     range: first_conflict_index..range.end.clone(),
                     priority,
-                    parent: LockStatePtr::Write((&**state).into()),
+                    parent: LockStatePtr::Write((&*state).into()),
                     in_progress,
                 }),
             )
@@ -493,10 +548,12 @@ where
     fn try_lock_read(
         self: Pin<&mut Self>,
         range: Range<Self::Index>,
-        state: Pin<&Guard<'_, Self::TryReadLockState>>,
+        state: Pin<&mut Self::TryReadLockState>,
     ) -> bool {
         // Safety: We won't violate the pinning invariant
         let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
 
         debug_assert!(range.start < range.end, "invalid range");
 
@@ -546,10 +603,12 @@ where
     fn try_lock_write(
         self: Pin<&mut Self>,
         range: Range<Self::Index>,
-        state: Pin<&Guard<'_, Self::TryWriteLockState>>,
+        state: Pin<&mut Self::TryWriteLockState>,
     ) -> bool {
         // Safety: We won't violate the pinning invariant
         let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
 
         debug_assert!(range.start < range.end, "invalid range");
 
@@ -593,11 +652,13 @@ where
 
     fn unlock_read<Callback: UnlockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
-        state: Pin<&Guard<'_, Self::ReadLockState>>,
+        state: Pin<&mut Self::ReadLockState>,
         callback: Callback,
     ) -> Option<Self::InProgress> {
         // Safety: We won't violate the pinning invariant
         let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
 
         // Check `state`'s ownership before touching its `UnsafeCell`s
         if state.parent.get() != Some(NonNull::from(&*this)) {
@@ -627,11 +688,13 @@ where
 
     fn unlock_write<Callback: UnlockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
-        state: Pin<&Guard<'_, Self::WriteLockState>>,
+        state: Pin<&mut Self::WriteLockState>,
         callback: Callback,
     ) -> Option<Self::InProgress> {
         // Safety: We won't violate the pinning invariant
         let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
 
         // Check `state`'s ownership before touching its `UnsafeCell`s
         if state.parent.get() != Some(NonNull::from(&*this)) {
@@ -662,11 +725,13 @@ where
     /// Release a non-blocking reader lock.
     fn unlock_try_read<Callback: UnlockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
-        state: Pin<&Guard<'_, Self::TryReadLockState>>,
+        state: Pin<&mut Self::TryReadLockState>,
         callback: Callback,
     ) {
         // Safety: We won't violate the pinning invariant
         let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
 
         // Check `state`'s ownership before touching its `UnsafeCell`s
         if state.parent.get() != Some(NonNull::from(&*this)) {
@@ -685,11 +750,13 @@ where
     /// Release a non-blocking writer lock.
     fn unlock_try_write<Callback: UnlockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
-        state: Pin<&Guard<'_, Self::TryWriteLockState>>,
+        state: Pin<&mut Self::TryWriteLockState>,
         callback: Callback,
     ) {
         // Safety: We won't violate the pinning invariant
         let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
 
         // Check `state`'s ownership before touching its `UnsafeCell`s
         if state.parent.get() != Some(NonNull::from(&*this)) {
@@ -1199,40 +1266,42 @@ fn panic_drop_when_still_locked() -> ! {
     panic!("attempted to drop an `RbTreeIntervalRwLockCore` while it's locked")
 }
 
-impl<Index, Priority, InProgress> EarlyDrop for ReadLockState<Index, Priority, InProgress> {
+impl<Index, Priority, InProgress> EarlyDrop for ReadLockStateInner<Index, Priority, InProgress> {
     #[inline]
     #[track_caller]
-    fn early_drop(&self) {
+    unsafe fn early_drop(self: Pin<&Self>) {
         if self.parent.get().is_some() {
             panic_drop_when_still_linked();
         }
     }
 }
 
-impl<Index, Priority, InProgress> EarlyDrop for WriteLockState<Index, Priority, InProgress> {
+impl<Index, Priority, InProgress> EarlyDrop for WriteLockStateInner<Index, Priority, InProgress> {
     #[inline]
     #[track_caller]
-    fn early_drop(&self) {
+    unsafe fn early_drop(self: Pin<&Self>) {
         if self.parent.get().is_some() {
             panic_drop_when_still_linked();
         }
     }
 }
 
-impl<Index, Priority, InProgress> EarlyDrop for TryReadLockState<Index, Priority, InProgress> {
+impl<Index, Priority, InProgress> EarlyDrop for TryReadLockStateInner<Index, Priority, InProgress> {
     #[inline]
     #[track_caller]
-    fn early_drop(&self) {
+    unsafe fn early_drop(self: Pin<&Self>) {
         if self.parent.get().is_some() {
             panic_drop_when_still_linked();
         }
     }
 }
 
-impl<Index, Priority, InProgress> EarlyDrop for TryWriteLockState<Index, Priority, InProgress> {
+impl<Index, Priority, InProgress> EarlyDrop
+    for TryWriteLockStateInner<Index, Priority, InProgress>
+{
     #[inline]
     #[track_caller]
-    fn early_drop(&self) {
+    unsafe fn early_drop(self: Pin<&Self>) {
         if self.parent.get().is_some() {
             panic_drop_when_still_linked();
         }
