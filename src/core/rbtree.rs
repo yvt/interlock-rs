@@ -938,25 +938,33 @@ where
 
             // Unborrow `index..end` before resuming this pending borrow
             let index = unsafe { pending_node.as_ref().element.range.start.clone() };
-            debug_assert!((&start..&end).contains(&&index));
+            debug_assert!((&start..=&end).contains(&&index));
 
-            unsafe { rbtree::Node::remove(ReadNodeCallback, &mut self.reads, read_nodes[1]) };
-            let complete = if index == start {
-                // The unborrowing is complete.
-                unsafe {
-                    rbtree::Node::remove(ReadNodeCallback, &mut self.reads, read_nodes[0]);
-                    *read_nodes_ptr.as_mut() = None;
-                }
-                true
-            } else {
-                // The unborrowing is incomplete. Truncate the borrow to
-                // `start..index`.
-                unsafe {
-                    read_nodes[1].as_mut().element.0 = index.clone();
-                    rbtree::Node::insert(ReadNodeCallback, &mut self.reads, read_nodes[1]);
-                }
-                end = index;
+            let complete = if index == end {
+                // Although we searched for pending nodes that are `< end`,
+                // since `end` is moved to the pending node's index on each
+                // iteration, we might come here if there are multiple pending
+                // nodes at the same index.
                 false
+            } else {
+                unsafe { rbtree::Node::remove(ReadNodeCallback, &mut self.reads, read_nodes[1]) };
+                if index == start {
+                    // The unborrowing is complete.
+                    unsafe {
+                        rbtree::Node::remove(ReadNodeCallback, &mut self.reads, read_nodes[0]);
+                        *read_nodes_ptr.as_mut() = None;
+                    }
+                    true
+                } else {
+                    // The unborrowing is incomplete. Truncate the borrow to
+                    // `start..index`.
+                    unsafe {
+                        read_nodes[1].as_mut().element.0 = index.clone();
+                        rbtree::Node::insert(ReadNodeCallback, &mut self.reads, read_nodes[1]);
+                    }
+                    end = index;
+                    false
+                }
             };
 
             // Resume this pending borrow.
@@ -1029,7 +1037,7 @@ where
 
             // Unborrow `index..end` before resuming this pending borrow
             let index = unsafe { pending_node.as_ref().element.range.start.clone() };
-            debug_assert!((&start..&end).contains(&&index));
+            debug_assert!((&start..=&end).contains(&&index));
 
             let complete = if index == start {
                 // The unborrowing is complete.
@@ -1039,6 +1047,11 @@ where
             } else {
                 // The unborrowing is incomplete. Truncate the borrow to
                 // `start..index`.
+                //
+                // Although we searched for pending nodes that are `< end`,
+                // since `end` is moved to the pending node's index on each
+                // iteration, we might observe `index == end` here if there are
+                // multiple pending nodes at the same index.
                 unsafe { write_node.as_mut().element.end = index.clone() };
                 end = index;
                 false
