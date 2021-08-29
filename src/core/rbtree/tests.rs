@@ -43,6 +43,7 @@ mod refr {
     use std::{
         cmp::Ordering,
         collections::{BTreeSet, HashMap, HashSet},
+        fmt,
         ops::Range,
         prelude::v1::*,
     };
@@ -200,6 +201,53 @@ mod refr {
             }
 
             lock.pos == lock.range.end
+        }
+    }
+
+    impl fmt::Debug for NotSoIntervalRwLockCore {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let borrow_sym = |is_write: Option<IsWrite>| match is_write {
+                None => " ",
+                Some(true) => "▓",
+                Some(false) => "░",
+            };
+
+            // Lock state bitmap
+            writeln!(f, "Memory bitmap:")?;
+            write!(f, "    ")?;
+            for x in (0..LEN).step_by(8) {
+                write!(f, "{:<8}", x)?;
+            }
+            writeln!(f, "{}", LEN)?;
+
+            write!(f, "   |")?;
+            for rwlock in self.rwlocks.iter() {
+                write!(
+                    f,
+                    "{}",
+                    borrow_sym(rwlock.owners.iter().next().map(|&(_, is_write)| is_write))
+                )?;
+            }
+            writeln!(f, "|")?;
+
+            // Locks
+            writeln!(f, "Borrows:")?;
+            for (id, lock) in self.locks.iter() {
+                write!(f, "{:3}:", id)?;
+
+                for _ in 0..lock.range.start {
+                    write!(f, " ")?;
+                }
+                for _ in lock.range.start..lock.pos {
+                    write!(f, "{}", borrow_sym(Some(lock.write)))?;
+                }
+                for _ in lock.pos..lock.range.end {
+                    write!(f, "-")?;
+                }
+                writeln!(f)?;
+            }
+
+            Ok(())
         }
     }
 }
@@ -366,13 +414,16 @@ fn qc_rbtree_interval_rw_lock_core(cmds: Vec<u8>) {
 
                 _ => {}
             }
-        }
 
-        // Validate trees
-        unsafe {
-            rbtree::Node::validate(&mut ReadNodeCallback, &subject_rwlock.reads);
-            rbtree::Node::validate(&mut WriteNodeCallback, &subject_rwlock.writes);
-            rbtree::Node::validate(&mut PendingNodeCallback, &subject_rwlock.pendings);
+            // Validate trees after each command completion
+            unsafe {
+                rbtree::Node::validate(&mut ReadNodeCallback, &subject_rwlock.reads);
+                rbtree::Node::validate(&mut WriteNodeCallback, &subject_rwlock.writes);
+                rbtree::Node::validate(&mut PendingNodeCallback, &subject_rwlock.pendings);
+            }
+
+            // Dump the borrow state
+            log::trace!("{:?}", reference_rwlock);
         }
 
         None
