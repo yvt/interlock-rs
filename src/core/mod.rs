@@ -36,6 +36,7 @@ pub trait IntervalRwLockCore {
     /// The type used to represent interval endpoints.
     type Index;
 
+    /// Governs the ordering between pending borrows at the same location.
     type Priority;
 
     /// The storage for per-lock data. Dropping it while it has an associated
