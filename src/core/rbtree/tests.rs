@@ -148,6 +148,11 @@ mod refr {
             }
         }
 
+        pub fn is_complete(&self, id: LockId) -> bool {
+            let lock = self.locks.get(&id).expect("non-existent lock");
+            lock.pos == lock.range.end
+        }
+
         fn resume(&mut self, id: LockId) -> bool {
             let lock = self.locks.get_mut(&id).unwrap();
 
@@ -535,6 +540,17 @@ fn qc_rbtree_interval_rw_lock_core(cmds: Vec<u8>) {
 
             // Validate trees after each command completion
             subject_rwlock.validate();
+
+            // Compare completeness
+            for &id in locks.iter() {
+                let subject_complete = subject_rwlock.is_complete(id);
+                let reference_complete = reference_rwlock.is_complete(id);
+                assert_eq!(
+                    subject_complete, reference_complete,
+                    "lock #{} is completed in one but not in the other",
+                    id
+                );
+            }
 
             // Dump the borrow state
             log::trace!("{:?}", reference_rwlock);
