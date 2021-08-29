@@ -390,8 +390,6 @@ mod subj {
 
     impl Drop for RwLockSet {
         fn drop(&mut self) {
-            use std::mem::{forget, replace};
-
             // Remove borrows in a not-so-subtle way so that this won't abort
             let rwlocks = unsafe { Pin::get_unchecked_mut(Pin::as_mut(&mut self.rwlocks)) };
             rwlocks.reads = None;
@@ -401,24 +399,16 @@ mod subj {
             for (_, lock) in self.locks.iter_mut() {
                 match &mut lock.state {
                     LockState::Read(state) => {
-                        let state = unsafe { Pin::get_unchecked_mut(Pin::as_mut(state)) };
-                        let old_state = replace(state, Default::default());
-                        forget(old_state);
+                        state.inner.get().unwrap().parent.set(None);
                     }
                     LockState::Write(state) => {
-                        let state = unsafe { Pin::get_unchecked_mut(Pin::as_mut(state)) };
-                        let old_state = replace(state, Default::default());
-                        forget(old_state);
+                        state.inner.get().unwrap().parent.set(None);
                     }
                     LockState::TryRead(state) => {
-                        let state = unsafe { Pin::get_unchecked_mut(Pin::as_mut(state)) };
-                        let old_state = replace(state, Default::default());
-                        forget(old_state);
+                        state.inner.get().unwrap().parent.set(None);
                     }
                     LockState::TryWrite(state) => {
-                        let state = unsafe { Pin::get_unchecked_mut(Pin::as_mut(state)) };
-                        let old_state = replace(state, Default::default());
-                        forget(old_state);
+                        state.inner.get().unwrap().parent.set(None);
                     }
                 }
             }
