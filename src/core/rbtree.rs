@@ -960,6 +960,7 @@ where
                     // `start..index`.
                     unsafe {
                         read_nodes[1].as_mut().element.0 = index.clone();
+                        read_nodes[1].as_mut().summary = -1;
                         rbtree::Node::insert(ReadNodeCallback, &mut self.reads, read_nodes[1]);
                     }
                     end = index;
@@ -1191,6 +1192,7 @@ where
                         );
                     }
                     read_node1.element.0 = new_end;
+                    read_node1.summary = -1;
                     unsafe {
                         rbtree::Node::insert(
                             ReadNodeCallback,

@@ -94,7 +94,9 @@ impl<Element, Summary: Clone> Node<Element, Summary> {
     /// be inserted after that node.
     ///
     /// It's up to the caller to initialize the new node's [`Node::summary`]
-    /// with a value consistent with [`Callback::element_to_summary`].
+    /// with a value consistent with [`Callback::element_to_summary`]. Note that
+    /// **a node that was just removed from a tree contains a summary value that
+    /// is incorrect for re-insertion!**
     ///
     /// # Safety
     ///
