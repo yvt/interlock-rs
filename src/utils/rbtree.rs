@@ -52,8 +52,10 @@ pub trait Callback<Element, Summary> {
     fn add_assign_summary(&mut self, lhs: &mut Summary, rhs: &Summary);
     /// Subtract `rhs` from `lhs` in place.
     fn sub_assign_summary(&mut self, lhs: &mut Summary, rhs: &Summary);
-    /// Add `rhs` to `lhs` in place.
-    fn cmp_element(&mut self, e1: &Element, e2: &Element) -> Ordering;
+    /// Determine the ordering between a new `Element` and an existing `Element`.
+    /// If the result is `Equal`, it's assumed to be `Greater`, i.e., when
+    /// duplicate elements are inserted, they are sorted in the insertion order.
+    fn cmp_element(&mut self, new_element: &Element, existing_element: &Element) -> Ordering;
 }
 
 #[derive(Debug, Copy, Clone)]

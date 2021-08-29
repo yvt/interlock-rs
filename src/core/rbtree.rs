@@ -313,10 +313,13 @@ impl<Index: Ord, Priority: Ord, InProgress>
     #[inline]
     fn cmp_element(
         &mut self,
-        e1: &Pending<Index, Priority, InProgress>,
-        e2: &Pending<Index, Priority, InProgress>,
+        new: &Pending<Index, Priority, InProgress>,
+        existing: &Pending<Index, Priority, InProgress>,
     ) -> Ordering {
-        (&e1.range.start, &e1.priority).cmp(&(&e2.range.start, &e2.priority))
+        (&new.range.start, &new.priority)
+            .cmp(&(&existing.range.start, &existing.priority))
+            // When they are tied, sort in the reverse insertion order
+            .then(Ordering::Less)
     }
 }
 

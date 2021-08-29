@@ -531,3 +531,23 @@ fn qc_rbtree_interval_rw_lock_core(cmds: Vec<u8>) {
         None
     })();
 }
+
+#[quickcheck]
+fn qc_waitlist_is_fifo(write1: IsWrite, write2: IsWrite) {
+    log::info!("{:?}", (write1, write2));
+
+    let mut subject_rwlock = subj::RwLockSet::new();
+    assert!(subject_rwlock.lock(1, 0..4, true, 0, true));
+    assert!(!subject_rwlock.lock(2, 0..3, write1, 0, false));
+    assert!(!subject_rwlock.lock(3, 0..2, write2, 0, false));
+
+    // Lock #2 and #3 are blocked at index 0
+
+    subject_rwlock.unlock(1);
+
+    // Now they are unblocked. However, lock #2 blocked first, so it will
+    // complete first. This means index 2 is still locked for reading or
+    // writing.
+
+    assert!(!subject_rwlock.lock(4, 2..3, true, 0, true));
+}
