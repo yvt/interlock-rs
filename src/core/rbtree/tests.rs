@@ -546,6 +546,23 @@ fn qc_rbtree_interval_rw_lock_core(cmds: Vec<u8>) {
             log::trace!("{:?}", reference_rwlock);
         }
 
+        // Release completed locks. This will unblock and complete other locks
+        // in turn. After repeating this step, if there are still incomplete
+        // locks, that means our interval lock is prone to deadlocks.
+        while !locks.is_empty() {
+            let i = locks
+                .iter()
+                .cloned()
+                .position(|id| subject_rwlock.is_complete(id));
+
+            if let Some(i) = i {
+                let id = locks.swap_remove(i);
+                subject_rwlock.unlock(id);
+            } else {
+                panic!("deadlock");
+            }
+        }
+
         None
     })();
 }
