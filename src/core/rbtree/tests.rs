@@ -263,6 +263,7 @@ mod subj {
         range: Range<Index>,
         priority: Priority,
         state: LockState,
+        complete: bool,
     }
 
     #[derive(Debug)]
@@ -338,6 +339,7 @@ mod subj {
                         state,
                         range,
                         priority,
+                        complete,
                     },
                 );
             }
@@ -350,20 +352,26 @@ mod subj {
             let mut lock = self.locks.remove(&id).unwrap();
             let rwlocks = Pin::as_mut(&mut self.rwlocks);
 
+            let callback = TestUnlockCallback(&mut self.locks);
+
             match &mut lock.state {
                 LockState::Read(state) => {
-                    rwlocks.unlock_read(Pin::as_mut(state), TestUnlockCallback);
+                    rwlocks.unlock_read(Pin::as_mut(state), callback);
                 }
                 LockState::Write(state) => {
-                    rwlocks.unlock_write(Pin::as_mut(state), TestUnlockCallback);
+                    rwlocks.unlock_write(Pin::as_mut(state), callback);
                 }
                 LockState::TryRead(state) => {
-                    rwlocks.unlock_try_read(Pin::as_mut(state), TestUnlockCallback);
+                    rwlocks.unlock_try_read(Pin::as_mut(state), callback);
                 }
                 LockState::TryWrite(state) => {
-                    rwlocks.unlock_try_write(Pin::as_mut(state), TestUnlockCallback);
+                    rwlocks.unlock_try_write(Pin::as_mut(state), callback);
                 }
             }
+        }
+
+        pub fn is_complete(&self, id: LockId) -> bool {
+            self.locks.get(&id).expect("non-existent lock").complete
         }
 
         pub fn validate(&self) {
@@ -427,11 +435,15 @@ mod subj {
         }
     }
 
-    struct TestUnlockCallback;
+    struct TestUnlockCallback<'a>(&'a mut HashMap<LockId, Lock>);
 
-    impl UnlockCallback<LockId> for TestUnlockCallback {
+    impl UnlockCallback<LockId> for TestUnlockCallback<'_> {
         fn complete(&mut self, in_progress: LockId) {
             log::debug!("... lock #{} is now complete", in_progress);
+
+            let lock = self.0.get_mut(&in_progress).unwrap();
+            assert_eq!(lock.complete, false);
+            lock.complete = true;
         }
     }
 }
@@ -550,4 +562,20 @@ fn qc_waitlist_is_fifo(write1: IsWrite, write2: IsWrite) {
     // writing.
 
     assert!(!subject_rwlock.lock(4, 2..3, true, 0, true));
+}
+
+#[test]
+fn unblock_multiple() {
+    let mut subject_rwlock = subj::RwLockSet::new();
+    assert!(subject_rwlock.lock(1, 0..1, true, 0, true));
+    assert!(!subject_rwlock.lock(2, 0..4, false, 0, false));
+    assert!(!subject_rwlock.lock(3, 0..5, false, 0, false));
+
+    // Lock #2 and #3 (read) are blocked at index 0
+
+    subject_rwlock.unlock(1);
+
+    // Now they are unblocked.
+    assert!(subject_rwlock.is_complete(2));
+    assert!(subject_rwlock.is_complete(3));
 }
