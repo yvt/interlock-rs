@@ -3,6 +3,12 @@
 //! [1]: https://en.wikipedia.org/wiki/Order_statistic_tree
 //! [2]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
 //! [3]: https://en.wikipedia.org/wiki/Binary_search_tree
+//!
+//! # Panic Safety
+//!
+//! **The mutation methods are not panic safe.**
+//! If any of the mutation methods panic, the tree structure might get
+//! corrupted, which will cause an undefined behavior in subsequent operations.
 #![allow(unsafe_op_in_unsafe_fn)] // *terrified bookhorse noise*
 use core::{
     cmp::Ordering,
@@ -12,11 +18,9 @@ use core::{
 };
 use guard::guard;
 
-// If panic unwinding is enabled, prevent the use of `unreachable_unchecked`
-// for panic safety
-#[cfg(not(any(debug_assertions, panic = "unwind")))]
+#[cfg(not(debug_assertions))]
 use core::hint::unreachable_unchecked;
-#[cfg(any(debug_assertions, panic = "unwind"))]
+#[cfg(debug_assertions)]
 #[track_caller]
 fn unreachable_unchecked() -> ! {
     unreachable!();
