@@ -15,6 +15,10 @@ pub mod hl;
 pub mod raw;
 mod utils {
     pub mod panicking;
+    #[cfg(not(miri))]
+    pub mod pin;
+    #[cfg(miri)]
+    #[path = "pin_boxed.rs"]
     pub mod pin;
     pub mod rbtree;
 }
