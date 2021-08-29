@@ -352,6 +352,8 @@ where
     type TryWriteLockState = TryWriteLockState<Index, Priority, InProgress>;
     type InProgress = InProgress;
 
+    const INIT: Self = Self::new();
+
     fn lock_read<Callback: LockCallback<Self::InProgress>>(
         self: Pin<&mut Self>,
         range: Range<Self::Index>,

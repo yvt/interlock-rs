@@ -41,21 +41,24 @@ pub trait IntervalRwLockCore {
 
     /// The storage for per-lock data. Dropping it while it has an associated
     /// lock will cause a panic.
-    type ReadLockState;
+    type ReadLockState: Default;
 
     /// Ditto for writer locks.
-    type WriteLockState;
+    type WriteLockState: Default;
 
     /// Ditto for non-blocking reader locks.
-    type TryReadLockState;
+    type TryReadLockState: Default;
 
     /// Ditto for non-blocking writer locks.
-    type TryWriteLockState;
+    type TryWriteLockState: Default;
 
     /// Created by a `LockCallback` implementation when a lock operation is
     /// blocked in the middle. It will later be passed to [`UnlockCallback::
     /// complete`] when the lock completes.
     type InProgress;
+
+    /// The initializer.
+    const INIT: Self;
 
     /// Acquire a reader lock.
     fn lock_read<Callback: LockCallback<Self::InProgress>>(
