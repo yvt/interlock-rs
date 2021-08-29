@@ -1,13 +1,12 @@
-use super::*;
 use quickcheck_macros::quickcheck;
 
 use std::prelude::v1::*;
 
-use crate::utils::rbtree;
-
 type Index = usize;
 type Priority = u64;
-type InProgress = ();
+type InProgress = LockId;
+
+type IsWrite = bool;
 
 const LEN: usize = 32;
 
@@ -38,7 +37,7 @@ const LEN: usize = 32;
 // ⠈⠄⠁⡂⠂⠅⠌⠐⠐⠨⠐⠀⠂⠈⠀⠁⠀⠠⢡⠳⢝⢗⢿⣿⣿⣿⣿⣿⣿⠿⠟⠯⡫⡺⡸⡪⡪⡣⡳⡱⡱⢱⢱⢣⢝⢎⢽⢺⢜⠮⣞⢯⣟⡿⣿⣿⣿⠇⠂⠀⢂⠣⠣⠣⡣⡣⡓⡕⡕⡝⡜⡵⡹⡪⠮⡳⡹⡹⡪⢯
 
 mod refr {
-    use super::{Index, LockId, Priority, LEN};
+    use super::{Index, IsWrite, LockId, Priority, LEN};
 
     use std::{
         cmp::Ordering,
@@ -47,8 +46,6 @@ mod refr {
         ops::Range,
         prelude::v1::*,
     };
-
-    type IsWrite = bool;
 
     #[derive(Default)]
     struct RwLock {
@@ -91,12 +88,12 @@ mod refr {
     }
 
     #[derive(Default)]
-    pub struct NotSoIntervalRwLockCore {
+    pub struct RwLockSet {
         rwlocks: Vec<RwLock>,
         locks: HashMap<LockId, Lock>,
     }
 
-    impl NotSoIntervalRwLockCore {
+    impl RwLockSet {
         pub fn new() -> Self {
             Self {
                 rwlocks: (0..LEN).map(|_| RwLock::default()).collect(),
@@ -204,7 +201,7 @@ mod refr {
         }
     }
 
-    impl fmt::Debug for NotSoIntervalRwLockCore {
+    impl fmt::Debug for RwLockSet {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             let borrow_sym = |is_write: Option<IsWrite>| match is_write {
                 None => " ",
@@ -252,39 +249,209 @@ mod refr {
     }
 }
 
+// Subject
+// --------------------------------------------------------------------------
+
+mod subj {
+
+    use super::super::*;
+    use super::{InProgress, Index, IsWrite, LockId, Priority};
+    use std::{collections::HashMap, prelude::v1::*};
+
+    #[derive(Debug)]
+    struct Lock {
+        range: Range<Index>,
+        priority: Priority,
+        state: LockState,
+    }
+
+    #[derive(Debug)]
+    enum LockState {
+        Read(Pin<Box<ReadLockState<Index, Priority, InProgress>>>),
+        Write(Pin<Box<WriteLockState<Index, Priority, InProgress>>>),
+        TryRead(Pin<Box<TryReadLockState<Index, Priority, InProgress>>>),
+        TryWrite(Pin<Box<TryWriteLockState<Index, Priority, InProgress>>>),
+    }
+
+    pub struct RwLockSet {
+        rwlocks: Pin<Box<RbTreeIntervalRwLockCore<Index, Priority, InProgress>>>,
+        locks: HashMap<LockId, Lock>,
+    }
+
+    impl RwLockSet {
+        pub fn new() -> Self {
+            Self {
+                rwlocks: Box::pin(RbTreeIntervalRwLockCore::new()),
+                locks: HashMap::new(),
+            }
+        }
+
+        /// Acquire a lock. Returns whether the lock is complete.
+        pub fn lock(
+            &mut self,
+            id: LockId,
+            range: Range<Index>,
+            write: IsWrite,
+            priority: Priority,
+            is_try: bool,
+        ) -> bool {
+            let rwlocks = Pin::as_mut(&mut self.rwlocks);
+
+            let (complete, state) = match (write, is_try) {
+                (false, false) => {
+                    let mut state = Box::pin(ReadLockState::new());
+                    let complete = rwlocks.lock_read(
+                        range.clone(),
+                        priority,
+                        Pin::as_mut(&mut state),
+                        TestLockCallback(id),
+                    );
+                    (complete, LockState::Read(state))
+                }
+                (true, false) => {
+                    let mut state = Box::pin(WriteLockState::new());
+                    let complete = rwlocks.lock_write(
+                        range.clone(),
+                        priority,
+                        Pin::as_mut(&mut state),
+                        TestLockCallback(id),
+                    );
+                    (complete, LockState::Write(state))
+                }
+                (false, true) => {
+                    let mut state = Box::pin(TryReadLockState::new());
+                    let complete = rwlocks.try_lock_read(range.clone(), Pin::as_mut(&mut state));
+                    (complete, LockState::TryRead(state))
+                }
+                (true, true) => {
+                    let mut state = Box::pin(TryWriteLockState::new());
+                    let complete = rwlocks.try_lock_write(range.clone(), Pin::as_mut(&mut state));
+                    (complete, LockState::TryWrite(state))
+                }
+            };
+
+            if complete || !is_try {
+                // Remember the lock
+                self.locks.insert(
+                    id,
+                    Lock {
+                        state,
+                        range,
+                        priority,
+                    },
+                );
+            }
+
+            complete
+        }
+
+        /// Release a lock.
+        pub fn unlock(&mut self, id: LockId) {
+            let mut lock = self.locks.remove(&id).unwrap();
+            let rwlocks = Pin::as_mut(&mut self.rwlocks);
+
+            match &mut lock.state {
+                LockState::Read(state) => {
+                    rwlocks.unlock_read(Pin::as_mut(state), TestUnlockCallback);
+                }
+                LockState::Write(state) => {
+                    rwlocks.unlock_write(Pin::as_mut(state), TestUnlockCallback);
+                }
+                LockState::TryRead(state) => {
+                    rwlocks.unlock_try_read(Pin::as_mut(state), TestUnlockCallback);
+                }
+                LockState::TryWrite(state) => {
+                    rwlocks.unlock_try_write(Pin::as_mut(state), TestUnlockCallback);
+                }
+            }
+        }
+
+        pub fn validate(&self) {
+            unsafe {
+                rbtree::Node::validate(&mut ReadNodeCallback, &self.rwlocks.reads);
+                rbtree::Node::validate(&mut WriteNodeCallback, &self.rwlocks.writes);
+                rbtree::Node::validate(&mut PendingNodeCallback, &self.rwlocks.pendings);
+            }
+        }
+    }
+
+    impl Drop for RwLockSet {
+        fn drop(&mut self) {
+            use std::mem::{forget, replace};
+
+            // Remove borrows in a not-so-subtle way so that this won't abort
+            let rwlocks = unsafe { Pin::get_unchecked_mut(Pin::as_mut(&mut self.rwlocks)) };
+            rwlocks.reads = None;
+            rwlocks.writes = None;
+            rwlocks.pendings = None;
+
+            for (_, lock) in self.locks.iter_mut() {
+                match &mut lock.state {
+                    LockState::Read(state) => {
+                        let state = unsafe { Pin::get_unchecked_mut(Pin::as_mut(state)) };
+                        let old_state = replace(state, Default::default());
+                        forget(old_state);
+                    }
+                    LockState::Write(state) => {
+                        let state = unsafe { Pin::get_unchecked_mut(Pin::as_mut(state)) };
+                        let old_state = replace(state, Default::default());
+                        forget(old_state);
+                    }
+                    LockState::TryRead(state) => {
+                        let state = unsafe { Pin::get_unchecked_mut(Pin::as_mut(state)) };
+                        let old_state = replace(state, Default::default());
+                        forget(old_state);
+                    }
+                    LockState::TryWrite(state) => {
+                        let state = unsafe { Pin::get_unchecked_mut(Pin::as_mut(state)) };
+                        let old_state = replace(state, Default::default());
+                        forget(old_state);
+                    }
+                }
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    struct TestLockCallback(LockId);
+
+    impl LockCallback<LockId> for TestLockCallback {
+        type Output = bool;
+
+        fn in_progress(self) -> (Self::Output, LockId) {
+            (false, self.0)
+        }
+
+        fn complete(self) -> Self::Output {
+            true
+        }
+    }
+
+    struct TestUnlockCallback;
+
+    impl UnlockCallback<LockId> for TestUnlockCallback {
+        fn complete(&mut self, in_progress: LockId) {
+            log::debug!("... lock #{} is now complete", in_progress);
+        }
+    }
+}
+
 // Tests
 // --------------------------------------------------------------------------
 
 type LockId = usize;
-
-#[derive(Debug)]
-struct Lock {
-    id: LockId,
-    range: Range<Index>,
-    priority: Priority,
-    state: LockState,
-}
-
-#[derive(Debug)]
-enum LockState {
-    Read(Pin<Box<ReadLockState<Index, Priority, InProgress>>>),
-    Write(Pin<Box<WriteLockState<Index, Priority, InProgress>>>),
-    TryRead(Pin<Box<TryReadLockState<Index, Priority, InProgress>>>),
-    TryWrite(Pin<Box<TryWriteLockState<Index, Priority, InProgress>>>),
-}
 
 #[quickcheck]
 fn qc_rbtree_interval_rw_lock_core(cmds: Vec<u8>) {
     let mut cmds = cmds.into_iter();
     let mut next_lock_id = 1;
 
-    let mut locks: Vec<Lock> = Vec::new();
+    let mut locks: Vec<LockId> = Vec::new();
 
     log::info!("cmds = {:?}", cmds);
 
-    let mut subject_rwlock =
-        Box::pin(RbTreeIntervalRwLockCore::<Index, Priority, InProgress>::new());
-    let mut reference_rwlock = refr::NotSoIntervalRwLockCore::new();
+    let mut subject_rwlock = subj::RwLockSet::new();
+    let mut reference_rwlock = refr::RwLockSet::new();
 
     (|| -> Option<()> {
         while let Some(cmd) = cmds.next() {
@@ -292,30 +459,15 @@ fn qc_rbtree_interval_rw_lock_core(cmds: Vec<u8>) {
                 0 if !locks.is_empty() => {
                     // Choose the lock to unlock
                     let i = cmds.next()? as usize % locks.len();
-                    let mut lock = locks.swap_remove(i);
+                    let id = locks.swap_remove(i);
 
-                    log::debug!("Unlocking {:?}", lock);
+                    log::debug!("Unlocking lock #{:?}", id);
 
                     // `subject_rwlock`
-                    match &mut lock.state {
-                        LockState::Read(state) => {
-                            Pin::as_mut(&mut subject_rwlock).unlock_read(Pin::as_mut(state), ());
-                        }
-                        LockState::Write(state) => {
-                            Pin::as_mut(&mut subject_rwlock).unlock_write(Pin::as_mut(state), ());
-                        }
-                        LockState::TryRead(state) => {
-                            Pin::as_mut(&mut subject_rwlock)
-                                .unlock_try_read(Pin::as_mut(state), ());
-                        }
-                        LockState::TryWrite(state) => {
-                            Pin::as_mut(&mut subject_rwlock)
-                                .unlock_try_write(Pin::as_mut(state), ());
-                        }
-                    }
+                    subject_rwlock.unlock(id);
 
                     // `reference_rwlock`
-                    reference_rwlock.unlock(lock.id);
+                    reference_rwlock.unlock(id);
                 }
 
                 1 if locks.len() < 64 => {
@@ -332,95 +484,45 @@ fn qc_rbtree_interval_rw_lock_core(cmds: Vec<u8>) {
 
                     let lock_ty = (cmd / 2 % 4) as usize;
                     let lock_ty_name = ["Read", "Write", "TryRead", "TryWrite"][lock_ty];
+                    let is_write = (lock_ty % 2) == 1;
+                    let is_try = lock_ty >= 2;
 
-                    log::debug!("Locking {:?}", (lock_id, &range, priority, lock_ty_name));
+                    log::debug!(
+                        "Locking {:?} as #{}",
+                        (&range, priority, lock_ty_name),
+                        lock_id
+                    );
 
                     // `subject_rwlock`
-                    let (ok, lock_state) = match lock_ty {
-                        0 => {
-                            let mut state = Box::pin(ReadLockState::new());
-                            Pin::as_mut(&mut subject_rwlock).lock_read(
-                                range.clone(),
-                                priority,
-                                Pin::as_mut(&mut state),
-                                (),
-                            );
-                            (true, LockState::Read(state))
-                        }
-                        1 => {
-                            let mut state = Box::pin(WriteLockState::new());
-                            Pin::as_mut(&mut subject_rwlock).lock_write(
-                                range.clone(),
-                                priority,
-                                Pin::as_mut(&mut state),
-                                (),
-                            );
-                            (true, LockState::Write(state))
-                        }
-                        2 => {
-                            let mut state = Box::pin(TryReadLockState::new());
-                            let ok = Pin::as_mut(&mut subject_rwlock)
-                                .try_lock_read(range.clone(), Pin::as_mut(&mut state));
-                            (ok, LockState::TryRead(state))
-                        }
-                        3 => {
-                            let mut state = Box::pin(TryWriteLockState::new());
-                            let ok = Pin::as_mut(&mut subject_rwlock)
-                                .try_lock_write(range.clone(), Pin::as_mut(&mut state));
-                            (ok, LockState::TryWrite(state))
-                        }
-                        _ => unreachable!(),
-                    };
+                    let subject_complete =
+                        subject_rwlock.lock(lock_id, range.clone(), is_write, priority, is_try);
 
-                    if !ok {
-                        log::debug!("... but did not success");
+                    if !subject_complete {
+                        log::debug!("... it did not complete");
                     }
-
-                    let is_write = match lock_state {
-                        LockState::Read(_) | LockState::TryRead(_) => false,
-                        LockState::Write(_) | LockState::TryWrite(_) => true,
-                    };
-                    let is_try = match lock_state {
-                        LockState::Read(_) | LockState::Write(_) => false,
-                        LockState::TryRead(_) | LockState::TryWrite(_) => true,
-                    };
 
                     // `reference_rwlock`
                     let reference_complete =
                         reference_rwlock.lock(lock_id, range.clone(), is_write, priority);
 
                     // Compare the results
-                    if is_try {
-                        // Both locks' behavior should match
-                        assert_eq!(ok, reference_complete);
-                    }
+                    assert_eq!(subject_complete, reference_complete);
 
                     // Lock failure?
-                    if !ok {
+                    if is_try && !subject_complete {
                         reference_rwlock.unlock(lock_id);
                         continue;
                     }
 
                     // Remember the lock
-                    let lock = Lock {
-                        id: lock_id,
-                        state: lock_state,
-                        range,
-                        priority,
-                    };
-
-                    locks.push(lock);
+                    locks.push(lock_id);
                 }
 
                 _ => {}
             }
 
             // Validate trees after each command completion
-            unsafe {
-                rbtree::Node::validate(&mut ReadNodeCallback, &subject_rwlock.reads);
-                rbtree::Node::validate(&mut WriteNodeCallback, &subject_rwlock.writes);
-                rbtree::Node::validate(&mut PendingNodeCallback, &subject_rwlock.pendings);
-            }
+            subject_rwlock.validate();
 
             // Dump the borrow state
             log::trace!("{:?}", reference_rwlock);
@@ -428,22 +530,4 @@ fn qc_rbtree_interval_rw_lock_core(cmds: Vec<u8>) {
 
         None
     })();
-
-    // Remove all borrows, or `subject_rwlock`'s destructor will panic
-    for mut lock in locks {
-        match &mut lock.state {
-            LockState::Read(state) => {
-                Pin::as_mut(&mut subject_rwlock).unlock_read(Pin::as_mut(state), ());
-            }
-            LockState::Write(state) => {
-                Pin::as_mut(&mut subject_rwlock).unlock_write(Pin::as_mut(state), ());
-            }
-            LockState::TryRead(state) => {
-                Pin::as_mut(&mut subject_rwlock).unlock_try_read(Pin::as_mut(state), ());
-            }
-            LockState::TryWrite(state) => {
-                Pin::as_mut(&mut subject_rwlock).unlock_try_write(Pin::as_mut(state), ());
-            }
-        }
-    }
 }
