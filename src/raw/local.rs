@@ -34,7 +34,9 @@ macro_rules! borrow_core {
 	};
 }
 
-impl<Core: IntervalRwLockCore<InProgress = !>> RawIntervalRwLock for LocalRawIntervalRwLock<Core> {
+unsafe impl<Core: IntervalRwLockCore<InProgress = !>> RawIntervalRwLock
+    for LocalRawIntervalRwLock<Core>
+{
     type Index = Core::Index;
 
     type TryReadLockState = Core::TryReadLockState;
@@ -74,7 +76,7 @@ impl<Core: IntervalRwLockCore<InProgress = !>> RawIntervalRwLock for LocalRawInt
     }
 }
 
-impl<Core: IntervalRwLockCore<InProgress = !>> RawBlockingIntervalRwLock
+unsafe impl<Core: IntervalRwLockCore<InProgress = !>> RawBlockingIntervalRwLock
     for LocalRawIntervalRwLock<Core>
 {
     type ReadLockState = Core::TryReadLockState;

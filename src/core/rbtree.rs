@@ -338,7 +338,7 @@ impl<Index, Priority, InProgress> RbTreeIntervalRwLockCore<Index, Priority, InPr
     }
 }
 
-impl<Index, Priority, InProgress> IntervalRwLockCore
+unsafe impl<Index, Priority, InProgress> IntervalRwLockCore
     for RbTreeIntervalRwLockCore<Index, Priority, InProgress>
 where
     Index: Clone + Ord,

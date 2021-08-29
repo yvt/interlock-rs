@@ -27,7 +27,7 @@ pub mod local;
 
 /// A non-blocking interface to a specialized readers-writer lock optimized for
 /// interval locks.
-pub trait RawIntervalRwLock {
+pub unsafe trait RawIntervalRwLock {
     /// The type used to represent interval endpoints.
     type Index;
 
@@ -64,7 +64,7 @@ pub trait RawIntervalRwLock {
 
 /// A blocking interface to a specialized readers-writer lock optimized for
 /// interval locks.
-pub trait RawBlockingIntervalRwLock: RawIntervalRwLock {
+pub unsafe trait RawBlockingIntervalRwLock: RawIntervalRwLock {
     /// The storage for per-lock data. Dropping it while it has an associated
     /// lock will cause a panic.
     type ReadLockState: Default;
@@ -104,7 +104,7 @@ pub trait RawBlockingIntervalRwLock: RawIntervalRwLock {
 /// for interval locks.
 ///
 /// [`Future`]: core::future::Future
-pub trait RawAsyncIntervalRwLock: RawIntervalRwLock {
+pub unsafe trait RawAsyncIntervalRwLock: RawIntervalRwLock {
     /// The storage for per-lock data. Dropping it while it has an associated
     /// (possibly pending) lock will cause a panic.
     type ReadLockState: Default;

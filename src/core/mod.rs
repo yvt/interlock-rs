@@ -32,7 +32,7 @@ pub mod rbtree;
 /// ¹ But only to the extent that doesn't put soundness in jeopardy.
 ///
 /// Panicking in user-provided trait methods may be escalated to aborting.
-pub trait IntervalRwLockCore {
+pub unsafe trait IntervalRwLockCore {
     /// The type used to represent interval endpoints.
     type Index;
 
