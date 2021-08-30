@@ -11,7 +11,10 @@ repository = "https://github.com/yvt/interlock-rs"
 
 [features]
 doc_cfg = []
-std = []
+std = [
+	"stable_deref_trait/std",
+	"thiserror",
+]
 
 [dependencies]
 guard = "0.5.1"  # <https://github.com/rust-lang/rfcs/pull/1303> polyfill
@@ -19,6 +22,8 @@ futures = { version = "0.3.16", default-features = false }
 pin-utils = "0.1.0"
 pin-project = "1.0.8"
 pin-cell = "0.1.1"
+stable_deref_trait = { version = "1.2.0", default-features = false }
+thiserror = { version = "1.0.28", optional = true }
 
 [dev-dependencies]
 quickcheck_macros = "1.0.0"

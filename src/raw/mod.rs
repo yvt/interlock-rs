@@ -119,17 +119,12 @@ pub unsafe trait RawAsyncIntervalRwLock: RawIntervalRwLock {
     ///
     /// This method associates `state` with a pending reader lock. It's an error
     /// to pass a `ReadLockState` that is already associated with a lock.
-    ///
-    /// This method returns `Poll::Ready` if the lock is complete. Otherwise, it
-    /// will return `Poll::Pending`, and `cx.waker()` will be used
-    /// to notify the client when a progress can be made.
     fn start_lock_read(
         self: Pin<&Self>,
         range: Range<Self::Index>,
         priority: Self::Priority,
         state: Pin<&mut Self::ReadLockState>,
-        cx: &mut Context<'_>,
-    ) -> Poll<()>;
+    );
 
     /// Start acquiring a writer lock.
     ///
@@ -139,8 +134,7 @@ pub unsafe trait RawAsyncIntervalRwLock: RawIntervalRwLock {
         range: Range<Self::Index>,
         priority: Self::Priority,
         state: Pin<&mut Self::WriteLockState>,
-        cx: &mut Context<'_>,
-    ) -> Poll<()>;
+    );
 
     /// Poll the status of a possibly-pending reader lock.
     ///
