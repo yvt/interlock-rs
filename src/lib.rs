@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::needless_return)] // <https://github.com/rust-lang/rust-clippy/issues/7637>
 #![feature(const_fn_trait_bound)]
 #![feature(array_methods)]

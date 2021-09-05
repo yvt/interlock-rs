@@ -83,6 +83,12 @@ where
         self.ptr.len()
     }
 
+    /// Get a flag indicating whether the underlying slice has no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Get a raw pointer to the underlying slice.
     #[inline]
     pub fn as_ptr(&self) -> *mut [Element] {

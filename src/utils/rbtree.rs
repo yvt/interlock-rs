@@ -742,21 +742,17 @@ impl<Element, Summary: Clone> Node<Element, Summary> {
         } else {
             callback.zero_summary()
         };
-        loop {
-            if let Some(parent) = &node.parent {
-                let parent = parent.as_ref();
-                if parent.children[1] == Some(NonNull::from(node)) {
-                    if let Some(child) = parent.children[0] {
-                        callback.add_assign_summary(&mut summary, &child.as_ref().summary);
-                    }
-
-                    let local_summary = callback.element_to_summary(&parent.element);
-                    callback.add_assign_summary(&mut summary, &local_summary);
+        while let Some(parent) = &node.parent {
+            let parent = parent.as_ref();
+            if parent.children[1] == Some(NonNull::from(node)) {
+                if let Some(child) = parent.children[0] {
+                    callback.add_assign_summary(&mut summary, &child.as_ref().summary);
                 }
-                node = parent;
-            } else {
-                break;
+
+                let local_summary = callback.element_to_summary(&parent.element);
+                callback.add_assign_summary(&mut summary, &local_summary);
             }
+            node = parent;
         }
         summary
     }
