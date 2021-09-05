@@ -16,7 +16,6 @@ use core::{
     mem::{replace, swap},
     ptr::NonNull,
 };
-use guard::guard;
 
 #[cfg(not(debug_assertions))]
 use core::hint::unreachable_unchecked;
@@ -405,7 +404,7 @@ impl<Element, Summary: Clone> Node<Element, Summary> {
 
         // If `parent` is `None`, the black height change propagated up to
         // the root
-        guard!(let Some(mut parent) = node.as_ref().parent else { return; });
+        let Some(mut parent) = node.as_ref().parent else { return; };
 
         loop {
             //       parent

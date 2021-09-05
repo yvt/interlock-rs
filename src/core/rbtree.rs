@@ -8,7 +8,6 @@ use core::{
     pin::Pin,
     ptr::NonNull,
 };
-use guard::guard;
 
 use super::{IntervalRwLockCore, LockCallback, UnlockCallback};
 use crate::utils::{
@@ -908,8 +907,8 @@ where
         // `Option<[NonNull<T>; 2]>`. If the result is `None`, return early.
         //
         // Safety: `*read_nodes` is safe to borrow
-        guard!(let Some(mut read_nodes) = unsafe { option_array2_as_ptr(read_nodes_ptr) }
-            else { return; });
+        let Some(mut read_nodes) =( unsafe { option_array2_as_ptr(read_nodes_ptr) })
+            else { return; };
 
         // The range we are about to unlock
         // Safety: It's still safe to borrow
@@ -1014,7 +1013,8 @@ where
         // If the result is `None`, return early.
         //
         // Safety: `*pending_node` is safe to borrow
-        guard!(let Some(mut write_node) = unsafe { option_as_ptr(write_node_ptr) } else { return; });
+        let Some(mut write_node) = (unsafe { option_as_ptr(write_node_ptr) })
+            else { return; };
 
         let Range { start, mut end } = unsafe { write_node.as_ref().element.clone() };
 

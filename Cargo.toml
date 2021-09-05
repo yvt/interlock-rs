@@ -3,7 +3,7 @@ name = "interlock"
 version = "0.0.0"
 authors = ["yvt <i@yvt.jp>"]
 license = "MIT/Apache-2.0"
-edition = "2018"
+edition = "2021"
 readme = "README.md"
 description = "Readers-writer locks optimized for interval locks"
 categories = ["no-std"]
@@ -17,7 +17,6 @@ std = [
 ]
 
 [dependencies]
-guard = "0.5.1"  # <https://github.com/rust-lang/rfcs/pull/1303> polyfill
 futures = { version = "0.3.16", default-features = false }
 pin-utils = "0.1.0"
 pin-project = "1.0.8"

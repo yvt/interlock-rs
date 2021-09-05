@@ -1,6 +1,5 @@
 //! The thread-unsafe (but faster) implementation.
 use core::{ops::Range, pin::Pin};
-use guard::guard;
 use pin_cell::PinCell;
 
 use crate::{
@@ -27,11 +26,11 @@ fn deadlocked() -> ! {
 }
 
 macro_rules! borrow_core {
-	(let $p:pat = $self:ident.core) => {
-		guard!(let Ok(mut core) = $self.project_ref().core.try_borrow_mut()
-			else { core_is_not_reentrant(); });
-		let $p = pin_cell::PinMut::as_mut(&mut core);
-	};
+    (let $p:pat = $self:ident.core) => {
+        let Ok(mut core) = $self.project_ref().core.try_borrow_mut()
+                			else { core_is_not_reentrant(); };
+        let $p = pin_cell::PinMut::as_mut(&mut core);
+    };
 }
 
 unsafe impl<Core: IntervalRwLockCore<InProgress = !>> RawIntervalRwLock
