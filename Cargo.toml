@@ -11,6 +11,7 @@ repository = "https://github.com/yvt/interlock-rs"
 
 [features]
 doc_cfg = []
+default = ["std"]
 std = [
 	"stable_deref_trait/std",
 	"thiserror",

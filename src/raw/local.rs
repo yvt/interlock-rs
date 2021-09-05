@@ -10,6 +10,7 @@ use crate::{
 /// Wraps `IntervalRwLockCore` (an internal trait) to provide a non-thread-safe
 /// readers-writer lock optimized for interval locks with a raw interface.
 #[pin_project::pin_project]
+#[derive(Debug)]
 pub struct LocalRawIntervalRwLock<Core> {
     #[pin]
     core: PinCell<Core>,

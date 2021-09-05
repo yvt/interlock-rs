@@ -24,6 +24,9 @@ use core::{
 };
 
 pub mod local;
+#[cfg(feature = "std")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "std")))]
+pub mod sync;
 
 /// A non-blocking interface to a specialized readers-writer lock optimized for
 /// interval locks.

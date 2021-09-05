@@ -537,3 +537,15 @@ pub type LocalRbTreeSliceIntervalRwLock<Container> = SliceIntervalRwLock<
     <Container as hidden::DerefToSlice>::Element,
     raw::local::LocalRawRbTreeIntervalRwLock<usize>,
 >;
+
+#[cfg(feature = "std")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "std")))]
+/// A thread-safe, blocking readers-writer lock for borrowing subslices of
+/// `Container`, implemented by a [red-black tree][1].
+///
+/// [1]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
+pub type SyncRbTreeSliceIntervalRwLock<Container, Priority = ()> = SliceIntervalRwLock<
+    Container,
+    <Container as hidden::DerefToSlice>::Element,
+    raw::sync::SyncRawRbTreeIntervalRwLock<usize, Priority>,
+>;
