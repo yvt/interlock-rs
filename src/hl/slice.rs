@@ -549,3 +549,15 @@ pub type SyncRbTreeSliceIntervalRwLock<Container, Priority = ()> = SliceInterval
     <Container as hidden::DerefToSlice>::Element,
     raw::sync::SyncRawRbTreeIntervalRwLock<usize, Priority>,
 >;
+
+/// A thread-safe, `Future`-oriented readers-writer lock for borrowing
+/// subslices of `Container`, implemented by a [red-black tree][1].
+/// `RawMutex: `[`lock_api::RawMutex`] is used to protect the internal state
+/// data from concurrent accesses.
+///
+/// [1]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
+pub type AsyncRbTreeSliceIntervalRwLock<RawMutex, Container, Priority = ()> = SliceIntervalRwLock<
+    Container,
+    <Container as hidden::DerefToSlice>::Element,
+    raw::future::AsyncRawRbTreeIntervalRwLock<RawMutex, usize, Priority>,
+>;

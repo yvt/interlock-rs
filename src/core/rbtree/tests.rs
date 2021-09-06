@@ -379,11 +379,30 @@ mod subj {
             self.locks.get(&id).expect("non-existent lock").complete
         }
 
-        pub fn validate(&self) {
+        pub fn validate(&mut self) {
             unsafe {
                 rbtree::Node::validate(&mut ReadNodeCallback, &self.rwlocks.reads);
                 rbtree::Node::validate(&mut WriteNodeCallback, &self.rwlocks.writes);
                 rbtree::Node::validate(&mut PendingNodeCallback, &self.rwlocks.pendings);
+            }
+
+            let mut rwlocks = Pin::as_mut(&mut self.rwlocks);
+
+            for (_, lock) in self.locks.iter_mut() {
+                let actual_complete = match &mut lock.state {
+                    LockState::Read(state) => matches!(
+                        Pin::as_mut(&mut rwlocks).inspect_read_mut(Pin::as_mut(state)),
+                        crate::core::LockState::Complete
+                    ),
+                    LockState::Write(state) => matches!(
+                        Pin::as_mut(&mut rwlocks).inspect_write_mut(Pin::as_mut(state)),
+                        crate::core::LockState::Complete
+                    ),
+                    LockState::TryRead(_) => true,
+                    LockState::TryWrite(_) => true,
+                };
+
+                assert_eq!(actual_complete, lock.complete);
             }
         }
     }

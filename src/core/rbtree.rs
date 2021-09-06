@@ -9,7 +9,7 @@ use core::{
     ptr::NonNull,
 };
 
-use super::{IntervalRwLockCore, LockCallback, UnlockCallback};
+use super::{IntervalRwLockCore, LockCallback, LockState, UnlockCallback};
 use crate::utils::{
     panicking::abort_on_unwind,
     pin::{EarlyDrop, EarlyDropGuard},
@@ -780,6 +780,50 @@ where
         // Unclaim `state`
         state.parent.set(None);
     }
+
+    fn inspect_read_mut<'a>(
+        self: Pin<&'a mut Self>,
+        state: Pin<&'a mut Self::ReadLockState>,
+    ) -> LockState<&'a mut Self::InProgress> {
+        // Safety: We won't violate the pinning invariant
+        let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
+
+        // Check `state`'s ownership before touching its `UnsafeCell`s
+        if state.parent.get() != Some(NonNull::from(&*this)) {
+            panic_lock_state_incorrect_parent();
+        }
+
+        // Safety: Since `state` is still claimed by `self`, we have
+        // exclusive access to the contained `UnsafeCell`s.
+        match unsafe { &mut *state.pending.get() } {
+            Some(pending_node) => LockState::InProgress(&mut pending_node.element.in_progress),
+            None => LockState::Complete,
+        }
+    }
+
+    fn inspect_write_mut<'a>(
+        self: Pin<&'a mut Self>,
+        state: Pin<&'a mut Self::WriteLockState>,
+    ) -> LockState<&'a mut Self::InProgress> {
+        // Safety: We won't violate the pinning invariant
+        let this = unsafe { self.get_unchecked_mut() };
+
+        let state = state.get();
+
+        // Check `state`'s ownership before touching its `UnsafeCell`s
+        if state.parent.get() != Some(NonNull::from(&*this)) {
+            panic_lock_state_incorrect_parent();
+        }
+
+        // Safety: Since `state` is still claimed by `self`, we have
+        // exclusive access to the contained `UnsafeCell`s.
+        match unsafe { &mut *state.pending.get() } {
+            Some(pending_node) => LockState::InProgress(&mut pending_node.element.in_progress),
+            None => LockState::Complete,
+        }
+    }
 }
 
 impl<Index, Priority, InProgress> RbTreeIntervalRwLockCore<Index, Priority, InProgress>
@@ -1251,7 +1295,7 @@ fn panic_lock_state_in_use() -> ! {
 #[cold]
 #[track_caller]
 fn panic_lock_state_incorrect_parent() -> ! {
-    panic!("attempted to release a lock with an incorrect origin")
+    panic!("attempted to operate on a lock with an incorrect origin")
 }
 
 /// Convert `NonNull<Option<T>>` to `Option<NonNull<T>>`.

@@ -27,6 +27,7 @@ mod utils {
     #[cfg(miri)]
     #[path = "pin_boxed.rs"]
     pub mod pin;
+    pub mod pinlock;
     #[cfg(feature = "std")]
     pub mod pinsync;
     pub mod rbtree;

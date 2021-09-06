@@ -26,8 +26,9 @@ pub mod rbtree;
 /// following circumstances:
 ///
 ///  - `range` is empty or invalid (`start >= end`).
-///  - `state` is already occupied (when locking) or associated with an
-///    incorrect instance of `Self` (when unlocking).
+///  - `state` is already occupied (when locking).
+///  - `state` is associated with an incorrect instance of `Self`
+///    (when unlocking or inspecting).
 ///
 /// ¹ But only to the extent that doesn't put soundness in jeopardy.
 ///
@@ -119,6 +120,20 @@ pub unsafe trait IntervalRwLockCore {
         state: Pin<&mut Self::TryWriteLockState>,
         callback: Callback,
     );
+
+    /// Get `state`'s associated lock's state, mutably borrowing the
+    /// `InProgress` if the lock is in-progress.
+    fn inspect_read_mut<'a>(
+        self: Pin<&'a mut Self>,
+        state: Pin<&'a mut Self::ReadLockState>,
+    ) -> LockState<&'a mut Self::InProgress>;
+
+    /// Get `state`'s associated lock's state, mutably borrowing the
+    /// `InProgress` if the lock is in-progress.
+    fn inspect_write_mut<'a>(
+        self: Pin<&'a mut Self>,
+        state: Pin<&'a mut Self::WriteLockState>,
+    ) -> LockState<&'a mut Self::InProgress>;
 }
 
 pub trait LockCallback<InProgress> {
@@ -143,4 +158,10 @@ impl UnlockCallback<!> for () {
     fn complete(&mut self, in_progress: !) {
         match in_progress {}
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum LockState<InProgress> {
+    InProgress(InProgress),
+    Complete,
 }

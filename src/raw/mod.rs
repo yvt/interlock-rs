@@ -23,6 +23,7 @@ use core::{
     task::{Context, Poll},
 };
 
+pub mod future; // not naming it `async` as it clashes with the keyword
 pub mod local;
 #[cfg(feature = "std")]
 #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "std")))]
