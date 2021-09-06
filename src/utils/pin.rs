@@ -24,9 +24,19 @@ pub trait EarlyDrop {
     unsafe fn early_drop(self: Pin<&Self>) {}
 }
 
+/// Insulates `T` from mutably borrows of `Self` or anything that contains one.
+/// I.e., makes it safe to immutably borrow `T` even if `self` is mutably
+/// borrowed through `Pin<&mut Self>` somewhere else.
+///
+/// To make this soundly possible, it harnesses the magical power of `async {
+/// ... }` blocks, which somehow excuse the created `Future`'s local variables
+/// from the usual pointer aliasing rules.
+///
 /// When dropped, magically calls `<T as `[`EarlyDrop`]`>::`[`early_drop`] on
 /// the inner object through a shared reference without creating an intermediate
-/// mutable reference.
+/// mutable reference. This is the last chance to ensure there are no
+/// outstanding references to the `T` because `<T as Drop>::drop`, which will
+/// happen next, will mutably borrow `T`.
 ///
 /// [`early_drop`]: EarlyDrop::early_drop
 #[pin_project::pin_project]

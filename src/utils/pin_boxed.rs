@@ -16,11 +16,7 @@ pub trait EarlyDrop {
     unsafe fn early_drop(self: Pin<&Self>) {}
 }
 
-/// When dropped, magically calls `<T as `[`EarlyDrop`]`>::`[`early_drop`] on
-/// the inner object through a shared reference without creating an intermediate
-/// mutable reference.
-///
-/// [`early_drop`]: EarlyDrop::early_drop
+/// See `pin.rs`
 #[pin_project::pin_project]
 pub struct EarlyDropGuard<T: EarlyDrop> {
     storage: Option<EarlyDroppingBox<T>>,

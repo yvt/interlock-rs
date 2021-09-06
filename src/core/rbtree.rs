@@ -108,6 +108,13 @@ macro_rules! impl_lock_state {
                 Self { inner: EarlyDropGuard::new() }
             }
 
+            /// Get a shared reference to the contained `$inner`.
+            ///
+            /// Note that there's no method that gives a mutable reference to
+            /// the contained `$inner`. This is because `$inner` may be linked
+            /// to another tree, in which case another thread could mutate
+            /// `$inner`'s interior-mutable fields even if the current thread
+            /// has `Pin<&mut $ty>`.
             #[inline]
             fn get(self: Pin<&mut Self>) -> Pin<&$inner<Index, Priority, InProgress>> {
                 self.project().inner.get_or_insert_default()
@@ -150,7 +157,6 @@ impl_lock_state! {
     /// Provides a storage to store information about a blocking reader lock in
     /// [`RbTreeIntervalRwLockCore`].
     pub struct ReadLockState { inner: ReadLockStateInner }
-
     /// Provides a storage to store information about a blocking writer lock in
     /// [`RbTreeIntervalRwLockCore`].
     pub struct WriteLockState { inner: WriteLockStateInner }
@@ -171,11 +177,17 @@ struct ReadLockStateInner<Index, Priority, InProgress> {
     // | Complete                    | `Some`   | `Some` | `None`    |
     /// The `RbTreeIntervalRwLockCore` `self` is currently used with. This is
     /// set when a lock is associated with `self` and cleared when the lock is
-    /// released.
+    /// released. When accessed through `Pin<&[mut]
+    /// [Try]{Read,Write}LockState>`, this field essentially inherits that
+    /// reference's mutability. (Maybe we can actually move this field to
+    /// `[Try]{Read,Write}LockState` and peel `Cell` off.)
     ///
-    /// In a method that takes `self: &mut RbTreeIntervalRwLockCore`, `parent
-    /// == self` usually means it's safe to mutably borrow this struct's
-    /// `UnsafeCell`s.
+    /// In a method that takes `self: &mut RbTreeIntervalRwLockCore` and `Pin<&
+    /// mut [Try]{Read,Write}LockState>`, `parent == self || parent == None`
+    /// usually means it's safe to mutably borrow this struct's UnsafeCell`s.
+    /// In other cases, doing so may cause an undefined behavior because the
+    /// nodes are linked to that `parent`'s tree and may be modified through
+    /// `*mut [Try]{Read,Write}LockStateInner`.
     parent: Cell<Option<NonNull<RbTreeIntervalRwLockCore<Index, Priority, InProgress>>>>,
     /// Stores a linked `PendingNode` if the borrow is incomplete.
     pending: UnsafeCell<Option<PendingNode<Index, Priority, InProgress>>>,
