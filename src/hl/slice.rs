@@ -520,7 +520,7 @@ mod hidden {
         type Element;
     }
 
-    impl<Element, T: ?Sized + core::ops::Deref<Target = [Element]>> DerefToSlice for T {
+    impl<Element, T: ?Sized + core::ops::DerefMut<Target = [Element]>> DerefToSlice for T {
         type Element = Element;
     }
 }
