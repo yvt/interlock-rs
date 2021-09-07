@@ -13,6 +13,9 @@ use stable_deref_trait::StableDeref;
 
 use crate::raw::{self, RawAsyncIntervalRwLock, RawBlockingIntervalRwLock, RawIntervalRwLock};
 
+#[cfg(test)]
+mod tests;
+
 // ----------------------------------------------------------------------------
 
 /// A specialized readers-writer lock for borrowing subslices of `Container:
