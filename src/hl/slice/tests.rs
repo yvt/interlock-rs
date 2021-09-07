@@ -15,13 +15,6 @@ use std::{
 
 use super::*;
 
-macro_rules! state {
-    (let mut $var:ident) => {
-        let $var = Default::default();
-        pin_mut!($var);
-    };
-}
-
 macro_rules! gen_nonblocking_test {
     ($modname:ident, $ty:ty) => {
         mod $modname {

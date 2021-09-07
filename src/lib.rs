@@ -17,6 +17,13 @@
 #[cfg(any(test, feature = "std"))]
 extern crate std;
 
+/// Used by [`state!`].
+#[doc(hidden)]
+pub use pin_utils::pin_mut;
+
+#[macro_use]
+mod macros;
+
 mod core;
 pub mod hl;
 pub mod raw;
