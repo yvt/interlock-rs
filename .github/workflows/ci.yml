@@ -26,15 +26,21 @@ jobs:
       matrix:
         target:
           - ""
-          # Can't build without atomics because of:
-          # <https://github.com/Amanieu/parking_lot/issues/277>
-          # - "riscv32i-unknown-none-elf"
+          - "riscv32i-unknown-none-elf"
           - "riscv64imac-unknown-none-elf"
         features:
           - ""
+          - "async"
           - "std"
+          - "std,async"
         exclude:
+          # The `async` feature requires atomics because of:
+          # <https://github.com/Amanieu/parking_lot/issues/277>
+          - { target: "riscv32i-unknown-none-elf", features: "async" }
+          - { target: "riscv32i-unknown-none-elf", features: "std" }
+          - { target: "riscv32i-unknown-none-elf", features: "std,async" }
           - { target: "riscv64imac-unknown-none-elf", features: "std" }
+          - { target: "riscv64imac-unknown-none-elf", features: "std,async" }
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
@@ -64,7 +70,7 @@ jobs:
 
       - name: cargo test
         uses: actions-rs/cargo@v1
-        if: ${{ matrix.target == '' && startsWith(matrix.features, 'std') }}
+        if: ${{ matrix.target == '' && matrix.features == 'std,async' }}
         with:
           command: test
           args: -p interlock ${{ env.target_param }} --no-default-features --features "${{ matrix.features }}" ${{ env.test_param }}

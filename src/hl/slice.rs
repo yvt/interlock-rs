@@ -553,6 +553,8 @@ pub type SyncRbTreeSliceIntervalRwLock<Container, Priority = ()> = SliceInterval
     raw::sync::SyncRawRbTreeIntervalRwLock<usize, Priority>,
 >;
 
+#[cfg(feature = "async")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "async")))]
 /// A thread-safe, `Future`-oriented readers-writer lock for borrowing
 /// subslices of `Container`, implemented by a [red-black tree][1].
 /// `RawMutex: `[`lock_api::RawMutex`] is used to protect the internal state

@@ -32,3 +32,10 @@ drop(guard2);
 // Mutably borrow `vec[16..48]`
 vec.try_write(16..48, Pin::as_mut(&mut state)).unwrap();
 ```
+
+## Cargo features
+
+ - **`std`** enables the items that depend on `std` or `alloc`.
+ - **`async`** enables the `Future`-oriented API. This currently requires a target with load/store atomics support. When [`lock_api` issue #277][1] is resolved, this requirement will be lifted, and this Cargo feature will be deprecated.
+
+[1]: https://github.com/Amanieu/parking_lot/issues/277

@@ -34,6 +34,7 @@ mod utils {
     #[cfg(miri)]
     #[path = "pin_boxed.rs"]
     pub mod pin;
+    #[cfg(feature = "async")]
     pub mod pinlock;
     #[cfg(feature = "std")]
     pub mod pinsync;
