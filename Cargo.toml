@@ -11,7 +11,7 @@ repository = "https://github.com/yvt/interlock-rs"
 
 [features]
 doc_cfg = []
-default = ["std", "async"]
+default = []
 async = ["lock_api"]
 std = [
 	"stable_deref_trait/std",
