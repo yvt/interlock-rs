@@ -1,0 +1,70 @@
+on: [push, pull_request]
+
+name: CI
+
+jobs:
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-20.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: clippy
+      - name: cargo clippy
+        uses: actions-rs/clippy-check@v1.0.7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-20.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        target:
+          - ""
+          # Can't build without atomics because of:
+          # <https://github.com/Amanieu/parking_lot/issues/277>
+          # - "riscv32i-unknown-none-elf"
+          - "riscv64imac-unknown-none-elf"
+        features:
+          - ""
+          - "std"
+        exclude:
+          - { target: "riscv64imac-unknown-none-elf", features: "std" }
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+
+      # No-`std` target is needed to really test `no_std`
+      - name: Install the target standard library
+        if: ${{ matrix.target != '' }}
+        run: |
+          rustup target add ${{ matrix.target }}
+
+      - name: Derive `--target` parameter
+        if: ${{ matrix.target != '' }}
+        run: echo "target_param=--target ${{ matrix.target }}" >> $GITHUB_ENV
+
+      - name: Skip doctests if `not(feature = "std")`
+        if: ${{ !startsWith(matrix.features, 'std') }}
+        run: echo "test_param=--lib" >> $GITHUB_ENV
+
+      - name: cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p interlock ${{ env.target_param }} --no-default-features --features "${{ matrix.features }}"
+
+      - name: cargo test
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.target == '' && startsWith(matrix.features, 'std') }}
+        with:
+          command: test
+          args: -p interlock ${{ env.target_param }} --no-default-features --features "${{ matrix.features }}" ${{ env.test_param }}
