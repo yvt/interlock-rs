@@ -2,6 +2,8 @@
 
 [<img src="https://docs.rs/interlock/badge.svg" alt="docs.rs">](https://docs.rs/interlock/)
 
+*Experimental, requires unstable compiler features*
+
 [Readers-writer locks][1] optimized for locking intervals. `#![no_std]` compatible.
 
 ```rust
@@ -81,6 +83,14 @@ The space complexity is `O(existing_borrows)`.
  - **`async`** enables the `Future`-oriented API. This currently requires a target with load/store atomics support. When [`lock_api` issue #277][1] is resolved, this requirement will be lifted, and this Cargo feature will be deprecated.
 
 [1]: https://github.com/Amanieu/parking_lot/issues/277
+
+## Future directions
+
+ - More thorough testing is probably required with respect to untrusted trait `impl`s and various kinds of safety.
+ - The `Mutex` and `ReentrantMutex` counterparts should be provided in addition to that of `RwLock`.
+ - Variants with simpler algorithms, such as linked lists, should be provided.
+ - The dependency on unstable compiler features should preferably be removed at some point.
+ - The hack for sound intrusive data structures (`EarlyDropGuard`) should be removed when Rust's memory model is adjusted to properly accommodate such structures.
 
 ## Alternatives
 
