@@ -1,6 +1,6 @@
 # 🌎🔒 interlock
 
-*Work in progress*
+[<img src="https://docs.rs/interlock/badge.svg" alt="docs.rs">](https://docs.rs/interlock/)
 
 [Readers-writer locks][1] optimized for locking intervals. `#![no_std]` compatible.
 
