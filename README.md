@@ -101,6 +101,7 @@ The space complexity is `O(existing_borrows)`.
  - **Parallel data processing:** Consider using [Rayon][1] for parallel computation.
 
  - **Per-element or per-segment borrows:** If you only need to borrow individual elements or segments (i.e., if it's acceptable to get `&mut T` or `&mut [T; SEGMENT_LEN]` instead of a more general, contiguous `&mut [T]`), consider wrapping individual elements or segments with [`parking_lot`][2]`::{Mutex, RwLock}`, which only take one byte and one word of space, respectively. In some cases, [`spin`][4] might be a more preferable choice.
+ 	- Suppose you replace `N` borrows from `Mutex` with one borrow from `SyncRbTreeSliceIntervalRwLock`. While the latter's locking time doesn't depend on `N`, due its inherent complexity, if `N` is too small, you might actually lose performance. According to some single-threaded micro-benchmark conducted on an AMD Zen processor, the threshold seems to be somewhere around `N = 6`. Expect a higher threshold in a real application because of cache effects and lock contention.
 
  - **Single processor, CPU-bound:** If only one processor accesses the slice simultaneously, and it's expected that the processor is fully occupied while the slice is borrowed, consider wrapping the whole slice with a `Mutex` or `RwLock`. In such cases, being able to borrow disjoint subslices simultaneously doesn't improve the overall throughput.
 

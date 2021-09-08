@@ -29,6 +29,7 @@ lock_api = { version = "0.4.5", optional = true }
 
 [dev-dependencies]
 quickcheck_macros = "1.0.0"
+criterion = "0.3.5"
 env_logger = "0.8.4"
 quickcheck = "1.0.3"
 log = "0.4.8"
@@ -40,3 +41,7 @@ rand = "0.8.4"
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[bench]]
+name = "slice_vs_naive"
+harness = false
