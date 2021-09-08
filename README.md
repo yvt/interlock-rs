@@ -9,7 +9,7 @@ use std::pin::Pin;
 use interlock::{hl::slice::SyncRbTreeSliceIntervalRwLock, state};
 
 let vec = Box::pin(SyncRbTreeSliceIntervalRwLock::new(vec![0u8; 64]));
-let vec = Pin::as_ref(&vec);
+let vec = vec.as_ref();
 
 // Borrow `vec[0..32]`
 state!(let mut state);
@@ -32,14 +32,13 @@ vec.try_write(16..48, Pin::as_mut(&mut state)).unwrap();
 ```
 
 ```rust
-use std::pin::Pin;
 use parking_lot::RawMutex;
 use interlock::{hl::slice::AsyncRbTreeSliceIntervalRwLock, state};
 
 #[tokio::main]
 async fn main() {
 	let vec = Box::pin(AsyncRbTreeSliceIntervalRwLock::<RawMutex, _>::new(vec![0u8; 64]));
-	let vec = Pin::as_ref(&vec);
+	let vec = vec.as_ref();
 
 	state!(let mut state);
 	let _guard = vec.async_read(0..32, (), state).await;
