@@ -8,9 +8,9 @@
 
 ```rust
 use std::pin::Pin;
-use interlock::{hl::slice::SyncRbTreeSliceIntervalRwLock, state};
+use interlock::{hl::slice::SyncRbTreeVecIntervalRwLock, state};
 
-let vec = Box::pin(SyncRbTreeSliceIntervalRwLock::new(vec![0u8; 64]));
+let vec = Box::pin(SyncRbTreeVecIntervalRwLock::new(vec![0u8; 64]));
 let vec = vec.as_ref();
 
 // Borrow `vec[0..32]`
@@ -35,11 +35,11 @@ vec.try_write(16..48, Pin::as_mut(&mut state)).unwrap();
 
 ```rust
 use parking_lot::RawMutex;
-use interlock::{hl::slice::AsyncRbTreeSliceIntervalRwLock, state};
+use interlock::{hl::slice::AsyncRbTreeVecIntervalRwLock, state};
 
 #[tokio::main]
 async fn main() {
-	let vec = Box::pin(AsyncRbTreeSliceIntervalRwLock::<RawMutex, _>::new(vec![0u8; 64]));
+	let vec = Box::pin(AsyncRbTreeVecIntervalRwLock::<RawMutex, _>::new(vec![0u8; 64]));
 	let vec = vec.as_ref();
 
 	state!(let mut state);
@@ -56,11 +56,14 @@ async fn main() {
 
 ### Red-black tree based implementation
 
-| Storage |       Locking Interface       |                      Type Alias                      |
-|---------|-------------------------------|------------------------------------------------------|
-| `[T]`   | Fallible + Panicking, `!Sync` | [`crate::hl::slice::LocalRbTreeSliceIntervalRwLock`] |
-| `[T]`   | Fallible + Blocking           | [`crate::hl::slice::SyncRbTreeSliceIntervalRwLock`]  |
-| `[T]`   | Fallible + `Future`-oriented  | [`crate::hl::slice::AsyncRbTreeSliceIntervalRwLock`] |
+|       Locking Interface       |  Storage   |                        Type Alias                       |
+|-------------------------------|------------|---------------------------------------------------------|
+| Fallible + Panicking, `!Sync` | `&mut [T]` | [`crate::hl::slice::LocalRbTreeSliceRefIntervalRwLock`] |
+| ↑                             | `Vec<T>`   | [`crate::hl::slice::LocalRbTreeVecIntervalRwLock`]      |
+| Fallible + Blocking           | `&mut [T]` | [`crate::hl::slice::SyncRbTreeSliceRefIntervalRwLock`]  |
+| ↑                             | `Vec<T>`   | [`crate::hl::slice::SyncRbTreeVecIntervalRwLock`]       |
+| Fallible + `Future`-oriented  | `&mut [T]` | [`crate::hl::slice::AsyncRbTreeSliceRefIntervalRwLock`] |
+| ↑                             | `Vec<T>`   | [`crate::hl::slice::AsyncRbTreeVecIntervalRwLock`]      |
 
 They are modeled as an array of virtual readers-writer locks. When locking, the virtual locks in the specified range are locked in ascending order. When unlocking, they are unlocked in descending order. (The locking order is important to prevent deadlocks.) The wait list of each virtual lock is ordered by `(priority, sequence)`, where `sequence` is a monotonically increasing number (thus enforcing FIFO ordering). When a virtual lock is unlocked, all entries in the wait list are examined and resumed instantly (if possible) in order.
 
@@ -80,6 +83,7 @@ The space complexity is `O(existing_borrows)`.
 ## Cargo features
 
  - **`std`** enables the items that depend on `std` or `alloc`.
+ - **`alloc`** enables the items that depend on `alloc`. This currently requires a target with `usize` atomics support because `stable_deref_trait/alloc` unconditionally implements `StableDeref` on `Arc`, which is gated by `cfg(target_has_atomic = "ptr")`.
  - **`async`** enables the `Future`-oriented API. This currently requires a target with load/store atomics support. When [`lock_api` issue #277][6] is resolved, this requirement will be lifted, and this Cargo feature will be deprecated.
 
 [6]: https://github.com/Amanieu/parking_lot/issues/277

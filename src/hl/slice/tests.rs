@@ -30,11 +30,11 @@ macro_rules! gen_nonblocking_test {
     };
 }
 
-gen_nonblocking_test!(nonblocking_local, LocalRbTreeSliceIntervalRwLock<Vec<i32>>);
-gen_nonblocking_test!(nonblocking_sync, SyncRbTreeSliceIntervalRwLock<Vec<i32>>);
+gen_nonblocking_test!(nonblocking_local, LocalRbTreeVecIntervalRwLock<i32>);
+gen_nonblocking_test!(nonblocking_sync, SyncRbTreeVecIntervalRwLock<i32>);
 gen_nonblocking_test!(
     nonblocking_async,
-    AsyncRbTreeSliceIntervalRwLock<RawMutex, Vec<i32>>
+    AsyncRbTreeVecIntervalRwLock<RawMutex, i32>
 );
 
 mod nonblocking {
@@ -267,13 +267,10 @@ macro_rules! gen_blockingish_test {
     };
 }
 
-gen_blockingish_test!(
-    blockingish_sync,
-    SyncRbTreeSliceIntervalRwLock<Vec<AtomicUsize>>
-);
+gen_blockingish_test!(blockingish_sync, SyncRbTreeVecIntervalRwLock<AtomicUsize>);
 gen_blockingish_test!(
     blockingish_async,
-    AsyncRbTreeSliceIntervalRwLock<RawMutex, Vec<AtomicUsize>>
+    AsyncRbTreeVecIntervalRwLock<RawMutex, AtomicUsize>
 );
 
 mod blockingish {
@@ -354,7 +351,7 @@ mod blockingish {
 
 #[tokio::test]
 async fn async_cancel() {
-    let rwlock = AsyncRbTreeSliceIntervalRwLock::<RawMutex, _>::new(vec![0; 16]);
+    let rwlock = AsyncRbTreeVecIntervalRwLock::<RawMutex, _>::new(vec![0; 16]);
     pin_mut!(rwlock);
     let rwlock = Pin::as_ref(&rwlock);
 

@@ -31,12 +31,18 @@ jobs:
         features:
           - ""
           - "async"
+          - "alloc"
+          - "alloc,async"
           - "std"
           - "std,async"
         exclude:
           # The `async` feature requires atomics because of:
           # <https://github.com/Amanieu/parking_lot/issues/277>
+          # `stable_deref_trait/alloc` fails to build without atomics
+          # because `alloc::sync::Arc` is gated by atomics.
           - { target: "riscv32i-unknown-none-elf", features: "async" }
+          - { target: "riscv32i-unknown-none-elf", features: "alloc" }
+          - { target: "riscv32i-unknown-none-elf", features: "alloc,async" }
           - { target: "riscv32i-unknown-none-elf", features: "std" }
           - { target: "riscv32i-unknown-none-elf", features: "std,async" }
           - { target: "riscv64imac-unknown-none-elf", features: "std" }

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Added
+	- `interlock::hl::slice::*RbTree{SliceRef, Vec}IntervalRwLock` - while the existing `*RbTreeSliceIntervalRwLock` encompasses them, its use of projection causes [issues][1] with the current non-Chalk trait solver.
+
 ## 0.0.1 - 2021-09-09
 
 [Unreleased]: https://github.com/yvt/interlock-rs/compare/0.0.1...HEAD
+[1]: https://github.com/rust-lang/rust/issues/85849

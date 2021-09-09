@@ -566,3 +566,81 @@ pub type AsyncRbTreeSliceIntervalRwLock<RawMutex, Container, Priority = ()> = Sl
     <Container as hidden::DerefToSlice>::Element,
     raw::future::AsyncRawRbTreeIntervalRwLock<RawMutex, usize, Priority>,
 >;
+
+/// A non-thread-safe readers-writer lock for borrowing subslices of
+/// `&'a mut [Element]`, implemented by a [red-black tree][1].
+///
+/// [1]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
+pub type LocalRbTreeSliceRefIntervalRwLock<'a, Element> = SliceIntervalRwLock<
+    &'a mut [Element],
+    Element,
+    raw::local::LocalRawRbTreeIntervalRwLock<usize>,
+>;
+
+#[cfg(feature = "std")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "std")))]
+/// A thread-safe, blocking readers-writer lock for borrowing subslices of
+/// `&'a mut [Element]`, implemented by a [red-black tree][1].
+///
+/// [1]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
+pub type SyncRbTreeSliceRefIntervalRwLock<'a, Element, Priority = ()> = SliceIntervalRwLock<
+    &'a mut [Element],
+    Element,
+    raw::sync::SyncRawRbTreeIntervalRwLock<usize, Priority>,
+>;
+
+#[cfg(feature = "async")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "async")))]
+/// A thread-safe, `Future`-oriented readers-writer lock for borrowing
+/// subslices of `&'a mut [Element]`, implemented by a [red-black tree][1].
+/// `RawMutex: `[`lock_api::RawMutex`] is used to protect the internal state
+/// data from concurrent accesses.
+///
+/// [1]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
+pub type AsyncRbTreeSliceRefIntervalRwLock<'a, RawMutex, Element, Priority = ()> =
+    SliceIntervalRwLock<
+        &'a mut [Element],
+        Element,
+        raw::future::AsyncRawRbTreeIntervalRwLock<RawMutex, usize, Priority>,
+    >;
+
+#[cfg(feature = "alloc")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+/// A non-thread-safe readers-writer lock for borrowing subslices of
+/// `Vec<Element>`, implemented by a [red-black tree][1].
+///
+/// [1]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
+pub type LocalRbTreeVecIntervalRwLock<Element> = SliceIntervalRwLock<
+    alloc::vec::Vec<Element>,
+    Element,
+    raw::local::LocalRawRbTreeIntervalRwLock<usize>,
+>;
+
+#[cfg(feature = "std")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "std")))]
+/// A thread-safe, blocking readers-writer lock for borrowing subslices of
+/// `Vec<Element>`, implemented by a [red-black tree][1].
+///
+/// [1]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
+pub type SyncRbTreeVecIntervalRwLock<Element, Priority = ()> = SliceIntervalRwLock<
+    alloc::vec::Vec<Element>,
+    Element,
+    raw::sync::SyncRawRbTreeIntervalRwLock<usize, Priority>,
+>;
+
+#[cfg(all(feature = "async", feature = "alloc"))]
+#[cfg_attr(
+    feature = "doc_cfg",
+    doc(cfg(all(feature = "async", feature = "alloc")))
+)]
+/// A thread-safe, `Future`-oriented readers-writer lock for borrowing
+/// subslices of `Vec<Element>`, implemented by a [red-black tree][1].
+/// `RawMutex: `[`lock_api::RawMutex`] is used to protect the internal state
+/// data from concurrent accesses.
+///
+/// [1]: https://en.wikipedia.org/wiki/Red%E2%80%93black_tree
+pub type AsyncRbTreeVecIntervalRwLock<RawMutex, Element, Priority = ()> = SliceIntervalRwLock<
+    alloc::vec::Vec<Element>,
+    Element,
+    raw::future::AsyncRawRbTreeIntervalRwLock<RawMutex, usize, Priority>,
+>;

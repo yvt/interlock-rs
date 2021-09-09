@@ -16,6 +16,9 @@
 #[cfg(any(test, feature = "std"))]
 extern crate std;
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 /// Used by [`state!`].
 #[doc(hidden)]
 pub use pin_utils::pin_mut;
