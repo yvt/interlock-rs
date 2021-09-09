@@ -20,6 +20,10 @@ extern crate std;
 #[doc(hidden)]
 pub use pin_utils::pin_mut;
 
+#[cfg(doc)]
+#[doc = include_str!("../CHANGELOG.md")]
+pub mod _changelog_ {}
+
 #[macro_use]
 mod macros;
 
