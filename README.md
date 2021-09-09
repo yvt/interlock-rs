@@ -4,7 +4,7 @@
 
 *Experimental, requires unstable compiler features*
 
-[Readers-writer locks][1] optimized for locking intervals. `#![no_std]` compatible.
+[Readers-writer locks][1] designed for locking intervals. `#![no_std]` compatible.
 
 ```rust
 use std::pin::Pin;
