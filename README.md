@@ -4,7 +4,7 @@
 
 *Experimental, requires unstable compiler features*
 
-[Readers-writer locks][1] designed for locking intervals. `#![no_std]` compatible.
+[Readers-writer locks][5] designed for locking intervals. `#![no_std]` compatible.
 
 ```rust
 use std::pin::Pin;
@@ -50,7 +50,7 @@ async fn main() {
 }
 ```
 
-[1]: https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock
+[5]: https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock
 
 ## Design
 
@@ -80,9 +80,9 @@ The space complexity is `O(existing_borrows)`.
 ## Cargo features
 
  - **`std`** enables the items that depend on `std` or `alloc`.
- - **`async`** enables the `Future`-oriented API. This currently requires a target with load/store atomics support. When [`lock_api` issue #277][1] is resolved, this requirement will be lifted, and this Cargo feature will be deprecated.
+ - **`async`** enables the `Future`-oriented API. This currently requires a target with load/store atomics support. When [`lock_api` issue #277][6] is resolved, this requirement will be lifted, and this Cargo feature will be deprecated.
 
-[1]: https://github.com/Amanieu/parking_lot/issues/277
+[6]: https://github.com/Amanieu/parking_lot/issues/277
 
 ## Future directions
 
