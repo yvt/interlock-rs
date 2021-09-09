@@ -12,3 +12,14 @@ macro_rules! state {
         $crate::pin_mut!($var);
     };
 }
+
+/// Gate items by `#[cfg(feature = "alloc")]`.
+macro_rules! if_alloc {
+    ($($tt:tt)*) => {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "alloc")] {
+                $($tt)*
+            }
+        }
+    };
+}

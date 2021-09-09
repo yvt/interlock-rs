@@ -16,6 +16,67 @@ use crate::raw::{self, RawAsyncIntervalRwLock, RawBlockingIntervalRwLock, RawInt
 #[cfg(test)]
 mod tests;
 
+// Lock guards associated with state data
+// ----------------------------------------------------------------------------
+
+if_alloc! {
+    use alloc::boxed::Box;
+    use crate::utils::PinDerefMut;
+
+    /// Associates a lock guard with state data.
+    ///
+    /// The `*_boxed` method family wraps a lock guard with this type instead of
+    /// having their own lock guard types. While this is less efficient (because
+    /// of an extra pointer to `State`) and requires lifetime transmutation,
+    /// this approach lets us minimize code duplication.
+    #[pin_project::pin_project]
+    struct WithState<LockGuard, State> {
+        /// `guard` must precede `state` because `guard` might include a
+        /// reference to `state`.
+        guard: Option<LockGuard>,
+        #[pin]
+        state: State,
+        /// `!Unpin` because `guard` might reference `state`.
+        _phantom: core::marker::PhantomPinned,
+    }
+
+    impl<LockGuard, State: Default> Default for WithState<LockGuard, State> {
+        #[inline]
+        fn default() -> Self {
+            Self {
+                guard: None,
+                state: State::default(),
+                _phantom: core::marker::PhantomPinned,
+            }
+        }
+    }
+
+    impl<LockGuard: Deref, State> Deref for WithState<LockGuard, State> {
+        type Target = LockGuard::Target;
+
+        #[inline]
+        fn deref(&self) -> &Self::Target {
+            self.guard.as_ref().unwrap()
+        }
+    }
+
+    impl<LockGuard: DerefMut, State> PinDerefMut for WithState<LockGuard, State> {
+        #[inline]
+        fn pin_deref_mut(self: Pin<&mut Self>) -> &mut Self::Target {
+            self.project().guard.as_mut().unwrap()
+        }
+    }
+
+    /// Erase the pinned mutable reference's lifetime.
+    ///
+    /// This is used to create a self-referential object of type [`WithState`],
+    #[inline]
+    unsafe fn transmute_lifetime_mut<'a, T: ?Sized>(x: Pin<&mut T>) -> Pin<&'a mut T> {
+        unsafe { Pin::new_unchecked(&mut *( x.get_unchecked_mut() as *mut T)) }
+    }
+}
+
+// `SliceIntervalRwLock` and its methods
 // ----------------------------------------------------------------------------
 
 /// A specialized readers-writer lock for borrowing subslices of `Container:
@@ -166,6 +227,67 @@ where
             Err(TryLockError::WouldBlock)
         }
     }
+
+    if_alloc! {
+        #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+        /// The variant of [`Self::try_read`] that dynamically allocates a
+        /// storage for borrow state data.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// use interlock::hl::slice::SyncRbTreeVecIntervalRwLock;
+        ///
+        /// let vec = Box::pin(SyncRbTreeVecIntervalRwLock::<_, ()>::new(vec![42u8; 64]));
+        /// let vec = vec.as_ref();
+        ///
+        /// let guard = vec.try_read_boxed(0..4).unwrap();
+        /// assert_eq!(guard[..], [42u8; 4][..]);
+        /// ```
+        pub fn try_read_boxed(
+            self: Pin<&Self>,
+            range: Range<usize>,
+        ) -> Result<Pin<Box<impl Deref<Target = [Element]> + '_>>, TryLockError>
+        {
+            let mut guard_with_state = Box::pin(WithState::default());
+            {
+                let guard_with_state = WithState::project(Pin::as_mut(&mut guard_with_state));
+                let state = unsafe { transmute_lifetime_mut(guard_with_state.state) };
+                *guard_with_state.guard = Some(self.try_read(range, state)?);
+            }
+            Ok(guard_with_state)
+        }
+
+        #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+        /// The variant of [`Self::try_write`] that dynamically allocates a
+        /// storage for borrow state data.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// use interlock::{hl::slice::SyncRbTreeVecIntervalRwLock, utils::PinDerefMut};
+        /// use std::pin::Pin;
+        ///
+        /// let vec = Box::pin(SyncRbTreeVecIntervalRwLock::<_, ()>::new(vec![42u8; 64]));
+        /// let vec = vec.as_ref();
+        ///
+        /// let mut guard = vec.try_write_boxed(0..4).unwrap();
+        /// Pin::as_mut(&mut guard).pin_deref_mut().copy_from_slice(&[56; 4]);
+        /// ```
+        pub fn try_write_boxed(
+            self: Pin<&Self>,
+            range: Range<usize>,
+        ) -> Result<Pin<Box<impl PinDerefMut<Target = [Element]> + '_>>, TryLockError>
+        {
+            let mut guard_with_state = Box::pin(WithState::default());
+            {
+                let guard_with_state = WithState::project(Pin::as_mut(&mut guard_with_state));
+                let state = unsafe { transmute_lifetime_mut(guard_with_state.state) };
+                *guard_with_state.guard = Some(self.try_write(range, state)?);
+            }
+            Ok(guard_with_state)
+        }
+    }
 }
 
 /// Indicates a failure of a non-blocking lock operation.
@@ -226,6 +348,69 @@ where
             ptr,
         }
     }
+
+    if_alloc! {
+        #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+        /// The variant of [`Self::read`] that dynamically allocates a
+        /// storage for borrow state data.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// use interlock::hl::slice::SyncRbTreeVecIntervalRwLock;
+        ///
+        /// let vec = Box::pin(SyncRbTreeVecIntervalRwLock::new(vec![42u8; 64]));
+        /// let vec = vec.as_ref();
+        ///
+        /// let guard = vec.read_boxed(0..4, ());
+        /// assert_eq!(guard[..], [42u8; 4][..]);
+        /// ```
+        pub fn read_boxed(
+            self: Pin<&Self>,
+            range: Range<usize>,
+            priority: RawLock::Priority,
+        ) -> Pin<Box<impl Deref<Target = [Element]> + '_>>
+        {
+            let mut guard_with_state = Box::pin(WithState::default());
+            {
+                let guard_with_state = WithState::project(Pin::as_mut(&mut guard_with_state));
+                let state = unsafe { transmute_lifetime_mut(guard_with_state.state) };
+                *guard_with_state.guard = Some(self.read(range, priority, state));
+            }
+            guard_with_state
+        }
+
+        #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+        /// The variant of [`Self::write`] that dynamically allocates a
+        /// storage for borrow state data.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// use interlock::{hl::slice::SyncRbTreeVecIntervalRwLock, utils::PinDerefMut};
+        /// use std::pin::Pin;
+        ///
+        /// let vec = Box::pin(SyncRbTreeVecIntervalRwLock::new(vec![42u8; 64]));
+        /// let vec = vec.as_ref();
+        ///
+        /// let mut guard = vec.write_boxed(0..4, ());
+        /// Pin::as_mut(&mut guard).pin_deref_mut().copy_from_slice(&[56; 4]);
+        /// ```
+        pub fn write_boxed(
+            self: Pin<&Self>,
+            range: Range<usize>,
+            priority: RawLock::Priority,
+        ) -> Pin<Box<impl PinDerefMut<Target = [Element]> + '_>>
+        {
+            let mut guard_with_state = Box::pin(WithState::default());
+            {
+                let guard_with_state = WithState::project(Pin::as_mut(&mut guard_with_state));
+                let state = unsafe { transmute_lifetime_mut(guard_with_state.state) };
+                *guard_with_state.guard = Some(self.write(range, priority, state));
+            }
+            guard_with_state
+        }
+    }
 }
 
 /// # `Future`-based Lock Operations
@@ -273,6 +458,75 @@ where
                 raw: this.raw,
                 ptr,
             }),
+        }
+    }
+
+    if_alloc! {
+        #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+        /// The variant of [`Self::async_read`] that dynamically allocates a
+        /// storage for borrow state data.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// # #[tokio::main] async fn main() {
+        /// use interlock::hl::slice::AsyncRbTreeVecIntervalRwLock;
+        /// use parking_lot::RawMutex;
+        ///
+        /// let vec = Box::pin(AsyncRbTreeVecIntervalRwLock::<RawMutex, _>::new(vec![42u8; 64]));
+        /// let vec = vec.as_ref();
+        ///
+        /// let guard = vec.async_read_boxed(0..4, ()).await;
+        /// assert_eq!(guard[..], [42u8; 4][..]);
+        /// # }
+        /// ```
+        pub async fn async_read_boxed(
+            self: Pin<&Self>,
+            range: Range<usize>,
+            priority: RawLock::Priority,
+        ) -> Pin<Box<impl Deref<Target = [Element]> + '_>>
+        {
+            let mut guard_with_state = Box::pin(WithState::default());
+            {
+                let guard_with_state = WithState::project(Pin::as_mut(&mut guard_with_state));
+                let state = unsafe { transmute_lifetime_mut(guard_with_state.state) };
+                *guard_with_state.guard = Some(self.async_read(range, priority, state).await);
+            }
+            guard_with_state
+        }
+
+        #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+        /// The variant of [`Self::async_write`] that dynamically allocates a
+        /// storage for borrow state data.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// # #[tokio::main] async fn main() {
+        /// use interlock::{hl::slice::AsyncRbTreeVecIntervalRwLock, utils::PinDerefMut};
+        /// use parking_lot::RawMutex;
+        /// use std::pin::Pin;
+        ///
+        /// let vec = Box::pin(AsyncRbTreeVecIntervalRwLock::<RawMutex, _>::new(vec![42u8; 64]));
+        /// let vec = vec.as_ref();
+        ///
+        /// let mut guard = vec.async_write_boxed(0..4, ()).await;
+        /// Pin::as_mut(&mut guard).pin_deref_mut().copy_from_slice(&[56; 4]);
+        /// # }
+        /// ```
+        pub async fn async_write_boxed(
+            self: Pin<&Self>,
+            range: Range<usize>,
+            priority: RawLock::Priority,
+        ) -> Pin<Box<impl PinDerefMut<Target = [Element]> + '_>>
+        {
+            let mut guard_with_state = Box::pin(WithState::default());
+            {
+                let guard_with_state = WithState::project(Pin::as_mut(&mut guard_with_state));
+                let state = unsafe { transmute_lifetime_mut(guard_with_state.state) };
+                *guard_with_state.guard = Some(self.async_write(range, priority, state).await);
+            }
+            guard_with_state
         }
     }
 }

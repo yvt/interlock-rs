@@ -348,6 +348,7 @@ dependencies = [
 name = "interlock"
 version = "0.0.1"
 dependencies = [
+ "cfg-if",
  "criterion",
  "cryo",
  "env_logger",

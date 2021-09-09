@@ -33,18 +33,21 @@ mod macros;
 mod core;
 pub mod hl;
 pub mod raw;
-mod utils {
-    pub mod panicking;
+pub mod utils {
+    pub(crate) mod panicking;
     #[cfg(not(miri))]
-    pub mod pin;
+    pub(crate) mod pin;
     #[cfg(miri)]
     #[path = "pin_boxed.rs"]
-    pub mod pin;
+    pub(crate) mod pin;
     #[cfg(feature = "async")]
-    pub mod pinlock;
+    pub(crate) mod pinlock;
     #[cfg(feature = "std")]
-    pub mod pinsync;
-    pub mod rbtree;
+    pub(crate) mod pinsync;
+    pub(crate) mod rbtree;
+
+    mod pinderef;
+    pub use pinderef::*;
 }
 
 #[cfg(test)]
