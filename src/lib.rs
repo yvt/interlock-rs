@@ -4,7 +4,6 @@
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::needless_return)] // <https://github.com/rust-lang/rust-clippy/issues/7637>
 #![cfg_attr(feature = "doc_cfg", feature(doc_cfg))]
-#![feature(const_fn_trait_bound)]
 #![feature(array_methods)]
 #![feature(never_type)]
 #![feature(type_alias_impl_trait)]
