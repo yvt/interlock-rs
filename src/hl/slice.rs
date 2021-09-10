@@ -81,6 +81,32 @@ if_alloc! {
 
 /// A specialized readers-writer lock for borrowing subslices of `Container:
 /// DerefMut<Target = [Element]>`.
+///
+/// # Locking Methods
+///
+/// | Category         | Read           | Write           | Read (boxed¹)        | Write (boxed¹)        |
+/// | ---------------- | -------------- | --------------- | -------------------- | --------------------- |
+/// | Fallible         | [`try_read`]   | [`try_write`]   | [`try_read_boxed`]   | [`try_write_boxed`]   |
+/// | [Blocking]       | [`read`]       | [`write`]       | [`read_boxed`]       | [`write_boxed`]       |
+/// | [`Future`-based] | [`async_read`] | [`async_write`] | [`async_read_boxed`] | [`async_write_boxed`] |
+///
+/// ¹ The boxed variation dynamically allocates a storage to store the borrow
+/// data and bundles it in the created RAII guard.
+///
+/// [Blocking]: #blocking-lock-operations
+/// [`Future`-based]: #future-based-lock-operations
+/// [`try_read`]: Self::try_read
+/// [`try_write`]: Self::try_write
+/// [`try_read_boxed`]: Self::try_read_boxed
+/// [`try_write_boxed`]: Self::try_write_boxed
+/// [`read`]: Self::read
+/// [`write`]: Self::write
+/// [`read_boxed`]: Self::read_boxed
+/// [`write_boxed`]: Self::write_boxed
+/// [`async_read`]: Self::async_read
+/// [`async_write`]: Self::async_write
+/// [`async_read_boxed`]: Self::async_read_boxed
+/// [`async_write_boxed`]: Self::async_write_boxed
 #[pin_project::pin_project]
 pub struct SliceIntervalRwLock<Container, Element, RawLock> {
     container: Container,
@@ -243,6 +269,25 @@ where
     }
 
     /// Attempt to acquire a reader lock on the specified range.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use interlock::{hl::slice::SyncRbTreeVecIntervalRwLock, state};
+    ///
+    /// let vec = Box::pin(SyncRbTreeVecIntervalRwLock::<_, ()>::new(vec![42u8; 64]));
+    ///
+    /// // The borrow state must be stored in a pinned place, which
+    /// // will be mutably borrowed by the lock guard
+    /// state!(let mut state);
+    ///
+    /// // Attempt to lock the range
+    /// let guard = vec.as_ref().try_read(0..4, state).unwrap();
+    /// assert_eq!(guard[..], [42u8; 4][..]);
+    ///
+    /// // (Optional) Explicitly unlock the range by dropping the lock guard
+    /// drop(guard);
+    /// ```
     pub fn try_read<'a>(
         self: Pin<&'a Self>,
         range: Range<usize>,
@@ -263,6 +308,26 @@ where
     }
 
     /// Attempt to acquire a writer lock on the specified range.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use interlock::{hl::slice::SyncRbTreeVecIntervalRwLock, utils::PinDerefMut, state};
+    /// use std::pin::Pin;
+    ///
+    /// let vec = Box::pin(SyncRbTreeVecIntervalRwLock::<_, ()>::new(vec![42u8; 64]));
+    ///
+    /// // The borrow state must be stored in a pinned place, which
+    /// // will be mutably borrowed by the lock guard
+    /// state!(let mut state);
+    ///
+    /// // Attempt to lock the range
+    /// let mut guard = vec.as_ref().try_write(0..4, state).unwrap();
+    /// guard.copy_from_slice(&[56; 4]);
+    ///
+    /// // (Optional) Explicitly unlock the range by dropping the lock guard
+    /// drop(guard);
+    /// ```
     pub fn try_write<'a>(
         self: Pin<&'a Self>,
         range: Range<usize>,
@@ -367,6 +432,19 @@ where
 {
     /// Acquire a reader lock on the specified range, blocking the current
     /// thread until it can be acquired.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use interlock::{hl::slice::SyncRbTreeVecIntervalRwLock, state};
+    ///
+    /// let vec = Box::pin(SyncRbTreeVecIntervalRwLock::new(vec![42u8; 64]));
+    ///
+    /// state!(let mut state);
+    ///
+    /// let guard = vec.as_ref().read(0..4, (), state);
+    /// assert_eq!(guard[..], [42u8; 4][..]);
+    /// ```
     pub fn read<'a>(
         self: Pin<&'a Self>,
         range: Range<usize>,
@@ -386,6 +464,20 @@ where
 
     /// Acquire a writer lock on the specified range, blocking the current
     /// thread until it can be acquired.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use interlock::{hl::slice::SyncRbTreeVecIntervalRwLock, utils::PinDerefMut, state};
+    /// use std::pin::Pin;
+    ///
+    /// let vec = Box::pin(SyncRbTreeVecIntervalRwLock::new(vec![42u8; 64]));
+    ///
+    /// state!(let mut state);
+    ///
+    /// let mut guard = vec.as_ref().write(0..4, (), state);
+    /// guard.copy_from_slice(&[56; 4]);
+    /// ```
     pub fn write<'a>(
         self: Pin<&'a Self>,
         range: Range<usize>,
@@ -476,6 +568,22 @@ where
     RawLock: RawIntervalRwLock<Index = usize> + RawAsyncIntervalRwLock,
 {
     /// Acquire a reader lock on the specified range asynchronously.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # #[tokio::main] async fn main() {
+    /// use interlock::{hl::slice::AsyncRbTreeVecIntervalRwLock, state};
+    /// use parking_lot::RawMutex;
+    ///
+    /// let vec = Box::pin(AsyncRbTreeVecIntervalRwLock::<RawMutex, _>::new(vec![42u8; 64]));
+    ///
+    /// state!(let mut state);
+    ///
+    /// let guard = vec.as_ref().async_read(0..4, (), state).await;
+    /// assert_eq!(guard[..], [42u8; 4][..]);
+    /// # }
+    /// ```
     pub fn async_read<'a>(
         self: Pin<&'a Self>,
         range: Range<usize>,
@@ -496,6 +604,23 @@ where
     }
 
     /// Acquire a writer lock on the specified range asynchronously.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # #[tokio::main] async fn main() {
+    /// use interlock::{hl::slice::AsyncRbTreeVecIntervalRwLock, utils::PinDerefMut, state};
+    /// use parking_lot::RawMutex;
+    /// use std::pin::Pin;
+    ///
+    /// let vec = Box::pin(AsyncRbTreeVecIntervalRwLock::<RawMutex, _>::new(vec![42u8; 64]));
+    ///
+    /// state!(let mut state);
+    ///
+    /// let mut guard = vec.as_ref().async_write(0..4, (), state).await;
+    /// guard.copy_from_slice(&[56; 4]);
+    /// # }
+    /// ```
     pub fn async_write<'a>(
         self: Pin<&'a Self>,
         range: Range<usize>,
