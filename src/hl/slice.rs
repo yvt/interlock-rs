@@ -175,7 +175,7 @@ where
         self.replace_container(Container::default())
     }
 
-    /// Update the contained `Container` in the provided closure.
+    /// Update the contained `Container` with the provided closure.
     ///
     /// # Panics
     ///
