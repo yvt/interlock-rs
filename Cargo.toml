@@ -14,12 +14,12 @@ doc_cfg = []
 default = []
 async = ["lock_api"]
 std = [
-	"stable_deref_trait/std",
-	"thiserror",
-	"alloc",
+    "stable_deref_trait/std",
+    "thiserror",
+    "alloc",
 ]
 alloc = [
-	"stable_deref_trait/alloc",  #  we want `StableDeref` for `Vec<T>`
+    "stable_deref_trait/alloc",  #  we want `StableDeref` for `Vec<T>`
 ]
 
 [dependencies]
