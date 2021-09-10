@@ -119,6 +119,10 @@ where
 
     /// Replace the contained `Container` with another one, returning the old
     /// one.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if `Container::deref_mut` panics.
     #[inline]
     pub fn replace_container(self: Pin<&mut Self>, mut container: Container) -> Container {
         let this = self.project();
@@ -133,12 +137,62 @@ where
 
     /// Replace the contained `Container` with [`Default::default`], returning
     /// the old one.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if `Container::deref_mut` panics.
     #[inline]
     pub fn take_container(self: Pin<&mut Self>) -> Container
     where
         Container: Default,
     {
         self.replace_container(Container::default())
+    }
+
+    /// Update the contained `Container` in the provided closure.
+    ///
+    /// # Panics
+    ///
+    /// This method will propagate any panics caused by the closure. This method
+    /// will **abort** the program if `Container::deref_mut` panics.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use interlock::hl::slice::SyncRbTreeVecIntervalRwLock;
+    ///
+    /// let mut rwl = Box::pin(SyncRbTreeVecIntervalRwLock::new(vec![42u8; 2]));
+    ///
+    /// // Resize the inner `Vec`
+    /// rwl.as_mut().update_container(|vec| vec.resize(64, 56u8));
+    ///
+    /// let guard = rwl.as_ref().read_boxed(0..4, ());
+    /// assert_eq!(guard[..], [42, 42, 56, 56]);
+    /// ```
+    ///
+    #[inline]
+    pub fn update_container<R>(
+        self: Pin<&mut Self>,
+        updater: impl FnOnce(&mut Container) -> R,
+    ) -> R {
+        struct Guard<'a, Container: DerefMut>(
+            &'a mut Container,
+            &'a mut NonNull<Container::Target>,
+        );
+        let this = self.project();
+        let guard = Guard(this.container, this.ptr);
+
+        // Call the provided closure
+        let output = updater(guard.0);
+
+        // Ensure `this.ptr` is up-to-date, whether `updater` panics or not
+        impl<Container: DerefMut> Drop for Guard<'_, Container> {
+            fn drop(&mut self) {
+                *self.1 = NonNull::from(&mut **self.0);
+            }
+        }
+
+        output
     }
 
     /// Get the number of elements in the underlying slice.
