@@ -67,7 +67,7 @@ async fn main() {
 
 They are modeled as an array of virtual readers-writer locks. When locking, the virtual locks in the specified range are locked in ascending order. When unlocking, they are unlocked in descending order. (The locking order is important to prevent deadlocks.) The wait list of each virtual lock is ordered by `(priority, sequence)`, where `sequence` is a monotonically increasing number (thus enforcing FIFO ordering). When a virtual lock is unlocked, all entries in the wait list are examined and resumed instantly (if possible) in order.
 
-On a lock conflict, the fallible interface fails and unlocks the already borrowed range, rolling back the lock to the original state. Other interfaces maintain the incomplete borrow until it's cancelled or completed by the removal of a conflicting borrow.
+On a lock conflict, the fallible interface fails and leaves all virtual locks unchanged. Other interfaces maintain the incomplete borrow until it's cancelled or completed by the removal of a conflicting borrow.
 
 The `Future`-oriented interface supports cancellation.
 
