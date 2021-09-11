@@ -1,4 +1,4 @@
-use cryo::cryo;
+use cryo::{AtomicLock, Cryo};
 use futures::future::{BoxFuture, FutureExt};
 use parking_lot::RawMutex;
 use pin_utils::pin_mut;
@@ -155,12 +155,15 @@ where
     ) -> BoxFuture<'a, Box<dyn Deref<Target = [Self::Element]> + Send + Sync + 'a>> {
         async move {
             // Extend the lifetime of inputs and let `cryo` do runtime
-            // enforcement
+            // enforcement. This can be circumvented by doing `forget` on the
+            // `Future`, so it's actually unsound (see `cryo::cryo!`'s
+            // documentation).
             let this: Pin<&'static Self> = unsafe { std::mem::transmute(self) };
             let lock_state: Pin<&'static mut _> = unsafe { std::mem::transmute(lock_state) };
 
-            cryo!(let cryo: Cryo<_, cryo::AtomicLock> = &());
-            let cryo_ref = cryo.borrow();
+            let cryo = unsafe { Cryo::<_, AtomicLock>::new(&()) };
+            pin_mut!(cryo);
+            let cryo_ref = cryo.as_ref().borrow();
             let guard = tokio::task::spawn_blocking(move || {
                 let _cryo_ref = cryo_ref;
                 this.read(range, priority, lock_state)
@@ -181,13 +184,13 @@ where
         lock_state: Pin<&'a mut Self::WriteLockState>,
     ) -> BoxFuture<'a, Box<dyn DerefMut<Target = [Self::Element]> + Send + Sync + 'a>> {
         async move {
-            // Extend the lifetime of inputs and let `cryo` do runtime
-            // enforcement
+            // Extend the lifetime of inputs and ditto.
             let this: Pin<&'static Self> = unsafe { std::mem::transmute(self) };
             let lock_state: Pin<&'static mut _> = unsafe { std::mem::transmute(lock_state) };
 
-            cryo!(let cryo: Cryo<_, cryo::AtomicLock> = &());
-            let cryo_ref = cryo.borrow();
+            let cryo = unsafe { Cryo::<_, AtomicLock>::new(&()) };
+            pin_mut!(cryo);
+            let cryo_ref = cryo.as_ref().borrow();
             let guard = tokio::task::spawn_blocking(move || {
                 let _cryo_ref = cryo_ref;
                 this.write(range, priority, lock_state)
