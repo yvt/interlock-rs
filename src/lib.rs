@@ -7,7 +7,6 @@
 #![feature(array_methods)]
 #![feature(never_type)]
 #![feature(type_alias_impl_trait)]
-#![feature(const_impl_trait)]
 #![feature(slice_ptr_len)]
 #![feature(slice_ptr_get)]
 #![feature(once_cell)]
