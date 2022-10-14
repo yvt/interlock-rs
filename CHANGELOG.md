@@ -6,8 +6,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+- Supports the nightly compilers between `2022-06-20` and `2022-10-13` (and possibly newer ones).
+
 ## [0.0.2] - 2021-09-10
 
+- Supports the nightly compilers between `2021-09-04` and `2022-04-08` (and possibly older ones).
 - Added
 	- `interlock::hl::slice::*RbTree{SliceRef, Vec}IntervalRwLock` - while the existing `*RbTreeSliceIntervalRwLock` encompasses them, its use of projection causes [inconveniences][1] with the current non-Chalk trait solver.
 	- `interlock::hl::slice::SliceIntervalRwLock::{, async_, try_}{read, write}_boxed`

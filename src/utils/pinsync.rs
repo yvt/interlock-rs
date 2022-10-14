@@ -1,15 +1,13 @@
 use std::{
     cell::UnsafeCell,
-    fmt,
-    lazy::SyncOnceCell,
-    ops,
+    fmt, ops,
     pin::Pin,
-    sync::{Mutex, MutexGuard as StdMutexGuard, TryLockError},
+    sync::{Mutex, MutexGuard as StdMutexGuard, OnceLock, TryLockError},
 };
 
 #[pin_project::pin_project]
 pub struct PinMutex<T> {
-    mutex: SyncOnceCell<Mutex<()>>,
+    mutex: OnceLock<Mutex<()>>,
     payload: UnsafeCell<T>,
 }
 
@@ -21,7 +19,7 @@ impl<T> PinMutex<T> {
     #[inline]
     pub const fn new(x: T) -> Self {
         Self {
-            mutex: SyncOnceCell::new(),
+            mutex: OnceLock::new(),
             payload: UnsafeCell::new(x),
         }
     }

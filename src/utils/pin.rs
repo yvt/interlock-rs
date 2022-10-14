@@ -40,7 +40,7 @@ pub trait EarlyDrop {
 ///
 /// [`early_drop`]: EarlyDrop::early_drop
 #[pin_project::pin_project]
-pub struct EarlyDropGuard<T> {
+pub struct EarlyDropGuard<T: EarlyDrop> {
     /// The `Future` holding the inner object.
     #[pin]
     holder: Option<Holder<T>>,
@@ -48,17 +48,17 @@ pub struct EarlyDropGuard<T> {
     storage: Option<NonNull<T>>,
 }
 
-unsafe impl<T: Send> Send for EarlyDropGuard<T> {}
-unsafe impl<T: Sync> Sync for EarlyDropGuard<T> {}
+unsafe impl<T: EarlyDrop + Send> Send for EarlyDropGuard<T> {}
+unsafe impl<T: EarlyDrop + Sync> Sync for EarlyDropGuard<T> {}
 
 /// The `Future` stored in `EarlyDropGuard` that provides a storage for `T`
 /// from its local variable. When dropped (cancelled), it calls
 /// `T::`[`early_drop`] *before* finally dropping the `T`.
 ///
 /// [`early_drop`]: EarlyDrop::early_drop
-type Holder<T> = impl Future<Output = !>;
+type Holder<T: EarlyDrop> = impl Future<Output = !>;
 
-impl<T> EarlyDropGuard<T> {
+impl<T: EarlyDrop> EarlyDropGuard<T> {
     /// Construct an `EarlyDropGuard`. The created `EarlyDropGuard` initially
     /// doesn't contain the inner object.
     pub const fn new() -> Self {
@@ -83,9 +83,7 @@ impl<T> EarlyDropGuard<T> {
             unsafe { Pin::new_unchecked(storage.as_ref()) }
         })
     }
-}
 
-impl<T: EarlyDrop> EarlyDropGuard<T> {
     /// Get a reference to the inner object, creating one with `init` if it
     /// hasn't been created yet.
     pub fn get_or_insert_with(self: Pin<&mut Self>, init: impl FnOnce() -> T) -> Pin<&T> {
@@ -162,7 +160,7 @@ impl<T: EarlyDrop> Drop for DoEarlyDropOnDrop<'_, T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for EarlyDropGuard<T> {
+impl<T: EarlyDrop + fmt::Debug> fmt::Debug for EarlyDropGuard<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(inner) = self.get() {
             fmt::Debug::fmt(&inner, f)
