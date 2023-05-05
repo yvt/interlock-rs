@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+- Supports the nightly compilers between `2022-09-18` and `2023-05-05` (and possibly newer ones).
+- Upgrade `pin-cell` to `^0.2.0`
+- Upgrade `cryo` (dev-dependency) to `^0.3.0`
+
 ## [0.0.3] - 2022-10-14
 
 - Supports the nightly compilers between `2022-06-20` and `2022-10-13` (and possibly newer ones).
