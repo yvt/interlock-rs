@@ -10,7 +10,6 @@
 #![feature(slice_ptr_len)]
 #![feature(slice_ptr_get)]
 #![feature(once_cell)]
-#![feature(let_else)] // <https://github.com/rust-lang/rust/issues/87335>
 
 #[cfg(any(test, feature = "std"))]
 extern crate std;
