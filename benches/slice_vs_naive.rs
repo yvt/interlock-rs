@@ -79,7 +79,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             ),
             |b| {
                 let rwl = Box::pin(SyncRbTreeSliceIntervalRwLock::new(vec![0; num_elems]));
-                let rwl = (&rwl).as_ref();
+                let rwl = rwl.as_ref();
                 let mut state: Vec<_> = (0..NUM_BORROWS)
                     .map(|_| Box::pin(Default::default()))
                     .collect();
@@ -106,12 +106,12 @@ fn criterion_benchmark(c: &mut Criterion) {
             ),
             |b| {
                 let rwl = Box::pin(SyncRbTreeSliceIntervalRwLock::new(vec![0; num_elems]));
-                let rwl = (&rwl).as_ref();
+                let rwl = rwl.as_ref();
                 interlock::state!(let mut state);
                 b.iter(|| {
                     for lock_range in lock_ranges.clone() {
                         let mut guard = rwl.write(lock_range, (), Pin::as_mut(&mut state));
-                        touch_slice(&mut *guard);
+                        touch_slice(&mut guard);
                     }
                 });
             },

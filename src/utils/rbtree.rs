@@ -906,7 +906,7 @@ pub(crate) mod tests {
                     Self::validate_node(callback, child, black_path, report_path, visited_path);
                     callback.add_assign_summary(&mut summary, &child.as_ref().summary);
                 } else {
-                    report_path(&black_path);
+                    report_path(black_path);
                 }
             }
 

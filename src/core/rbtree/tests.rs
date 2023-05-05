@@ -130,7 +130,7 @@ mod refr {
                     id,
                     write: lock.write,
                     priority: lock.priority,
-                    order: order,
+                    order,
                 }));
             }
 
