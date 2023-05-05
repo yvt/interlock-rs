@@ -482,9 +482,9 @@ dependencies = [
 
 [[package]]
 name = "pin-cell"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ca13e07360dbdcf21644512cd2c3e23d64c14ad4c51265571105171597ba107"
+checksum = "e1f4c4ebd3c5f82080164b7d9cc8e505cd9536fda8c750b779daceb4b7180a7b"
 
 [[package]]
 name = "pin-project"
