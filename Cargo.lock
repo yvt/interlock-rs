@@ -144,9 +144,9 @@ dependencies = [
 
 [[package]]
 name = "cryo"
-version = "0.2.7"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56e9e751107f675c69b155d586a27960f96d66e25d573b430bf42b15e9f844bc"
+checksum = "61aaf3d4653638481e708f4d6843893f639395e493d71359da0731ea5fe4dd10"
 dependencies = [
  "pin-utils",
  "stable_deref_trait",
