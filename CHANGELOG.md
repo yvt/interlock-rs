@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.0.4] - 2023-05-06
 
 - Supports the nightly compilers between `2022-09-18` and `2023-05-05` (and possibly newer ones).
 - Upgrade `pin-cell` to `^0.2.0`
@@ -25,7 +26,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## 0.0.1 - 2021-09-09
 
-[Unreleased]: https://github.com/yvt/interlock-rs/compare/0.0.3...HEAD
+[Unreleased]: https://github.com/yvt/interlock-rs/compare/0.0.4...HEAD
+[0.0.4]: https://github.com/yvt/interlock-rs/compare/0.0.3...0.0.4
 [0.0.3]: https://github.com/yvt/interlock-rs/compare/0.0.2...0.0.3
 [0.0.2]: https://github.com/yvt/interlock-rs/compare/0.0.1...0.0.2
 [1]: https://github.com/rust-lang/rust/issues/85849
